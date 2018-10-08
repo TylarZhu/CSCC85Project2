@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
  * @return int, 1 fail 0 success
  */
 int find_street(void) {
-    printf("sensor value: %i\n", BT_read_colour_sensor(PORT_1));
+    //printf("sensor value: %i\n", BT_read_colour_sensor(PORT_1));
     return (0);
 }
 

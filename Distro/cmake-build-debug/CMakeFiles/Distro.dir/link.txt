@@ -1,0 +1,1 @@
+/usr/bin/cc -g   CMakeFiles/Distro.dir/EV3_RobotControl/btcomm_test.c.o  -o Distro 

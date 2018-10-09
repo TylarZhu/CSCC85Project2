@@ -94,6 +94,8 @@ int map[400][4];            // This holds the representation of the map, up to 2
 int sx, sy;                 // Size of the map (number of intersections along x and y)
 double beliefs[400][4];     // Beliefs for each location and motion direction
 
+int rgb[3];
+
 int main(int argc, char *argv[]) {
     char mapname[1024];
     int dest_x, dest_y, rx, ry;
@@ -203,7 +205,7 @@ int main(int argc, char *argv[]) {
     // HERE - write code to call robot_localization() and go_to_target() as needed, any additional logic required to get the
     //        robot to complete its task should be here.
 
-    find_street();
+    drive_along_street();
 
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
     BT_close();
@@ -215,11 +217,12 @@ int main(int argc, char *argv[]) {
  * This function gets your robot onto a street, wherever it is placed on the map. You can do this in many ways, but think
  * about what is the most effective and reliable way to detect a street and stop your robot once it's on it.
  *
- * @return int, 1 fail 0 success
+ * @return int, 1 success 0 fail
  */
 int find_street(void) {
-    //printf("sensor value: %i\n", BT_read_colour_sensor(PORT_1));
-    return (0);
+
+
+    return 1;
 }
 
 /*!
@@ -233,14 +236,14 @@ int find_street(void) {
  * @return int, 1 fail 0 success
  */
 int drive_along_street(void) {
-    // if the robot find the street, then fellow the line.
-    // otherwise, keep turning until find the street.
-    if(find_street()) {
-
-    } else {
-
+    while (!is_it_yellow()) {
+        while(!is_it_black() && !is_it_yellow()) {
+            BT_turn(MOTOR_A, 15, MOTOR_B, -15);
+        }
+        BT_drive(MOTOR_A, MOTOR_B, 20);
     }
-    return (0);
+    BT_all_stop(0);
+    return 0;
 }
 
 /*!
@@ -683,3 +686,86 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
 
     return (im);
 }
+
+/************************************************************************************************************************
+ *   HELPER FUNCTION SECTION
+ ***********************************************************************************************************************/
+
+/*!
+ * test if the color is black.
+ * @return 1 yes 0 no
+ */
+int is_it_black(void) {
+    BT_read_colour_sensor_RGB(PORT_1, rgb);
+    if((rgb[0] < 100 && rgb[1] < 100 && rgb[2] < 100) || (BT_read_colour_sensor(PORT_1) == 1)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/*!
+ * test if the color is blue.
+ * @return 1 yes 0 no
+ */
+int is_it_blue(void) {
+    BT_read_colour_sensor_RGB(PORT_1, rgb);
+    if((rgb[0] < 100 && rgb[1] < 100 && rgb[2] > 100) || (BT_read_colour_sensor(PORT_1) == 2)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/*!
+ * test if the color is green
+ * @return 1 yes 0 no
+ */
+int is_it_green(void){
+    BT_read_colour_sensor_RGB(PORT_1, rgb);
+    if((rgb[0] < 100 && rgb[1] > 100 && rgb[2] < 100) || (BT_read_colour_sensor(PORT_1) == 3)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/*!
+ * test if the color is yellow
+ * @return 1 yes 0 no
+ */
+int is_it_yellow(void) {
+    BT_read_colour_sensor_RGB(PORT_1, rgb);
+    if((rgb[0] > 100 && rgb[1] > 100 && rgb[2] < 100) || (BT_read_colour_sensor(PORT_1) == 4)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/*!
+ * test if the color is red.
+ * @return 1 yes 0 no
+ */
+int is_it_red(void) {
+    BT_read_colour_sensor_RGB(PORT_1, rgb);
+    if((rgb[0] > 100 && rgb[1] < 100 && rgb[2] < 100) || (BT_read_colour_sensor(PORT_1) == 5)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/*!
+ * test if the color is white.
+ * @return 1 yes 0 no
+ */
+int is_it_white(void){
+    BT_read_colour_sensor_RGB(PORT_1, rgb);
+    if((rgb[0] > 100 && rgb[1] > 100 && rgb[2] > 100) || (BT_read_colour_sensor(PORT_1) == 6)) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+

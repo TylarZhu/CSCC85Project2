@@ -91,4 +91,16 @@ void calibrate_sensor(void);
 
 unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 
+int is_it_black(void);
+
+int is_it_blue(void);
+
+int is_it_green(void);
+
+int is_it_red(void);
+
+int is_it_yellow(void);
+
+int is_it_white(void);
+
 #endif

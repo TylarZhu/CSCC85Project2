@@ -73,6 +73,13 @@ code that you have to complete in order to implement the localization algorithms
 #define HEXKEY "00:16:53:55:D2:17"
 #endif
 
+int Black[] = {0,0,0};
+int Blue[] = {0,0,255};
+int Green[] = {0,255,0};
+int Yellow[] = {255,255,0};
+int Red[] = {255,0,0};
+int White[] = {255,255,255};
+
 int parse_map(unsigned char *map_img, int rx, int ry);
 
 int robot_localization(int *robot_x, int *robot_y, int *direction);
@@ -90,5 +97,7 @@ int turn_at_intersection(int turn_direction);
 void calibrate_sensor(void);
 
 unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
+
+int Distinguish_Color(double possibility[6]);
 
 #endif

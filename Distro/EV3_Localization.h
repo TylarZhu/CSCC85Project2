@@ -91,16 +91,12 @@ void calibrate_sensor(void);
 
 unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 
-int is_it_black(void);
+int color_recognize(void);
 
-int is_it_blue(void);
+void turn_90_degree_both_wheel(int);
 
-int is_it_green(void);
+void turn_180_degree_both_wheel(void);
 
-int is_it_red(void);
-
-int is_it_yellow(void);
-
-int is_it_white(void);
+//int turn_90_degree_one_wheel(char);
 
 #endif

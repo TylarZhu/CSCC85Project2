@@ -87,6 +87,7 @@
 */
 
 #include "EV3_Localization.h"
+#include <stdbool.h>
 
 int map[400][4];            // This holds the representation of the map, up to 20x20
                             // intersections, raster ordered, 4 building colours per
@@ -205,8 +206,10 @@ int main(int argc, char *argv[]) {
     // HERE - write code to call robot_localization() and go_to_target() as needed, any additional logic required to get the
     //        robot to complete its task should be here.
 
-    drive_along_street();
+    //drive_along_street();
 
+
+    find_street();
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
     BT_close();
     free(map_image);
@@ -220,8 +223,17 @@ int main(int argc, char *argv[]) {
  * @return int, 1 success 0 fail
  */
 int find_street(void) {
-
-
+    // go across the map until find the road
+    while(color_recognize() != 1 && color_recognize() != 4) {
+        BT_drive(MOTOR_A, MOTOR_B, 20);
+        // if the car hit the wall, turn 180
+        if(color_recognize() == 5) {
+            BT_all_stop(0);
+            turn_180_degree();
+        }
+    }
+    BT_all_stop(0);
+    turn_90_degree_both_wheel(1);
     return 1;
 }
 
@@ -236,11 +248,89 @@ int find_street(void) {
  * @return int, 1 fail 0 success
  */
 int drive_along_street(void) {
-    while (!is_it_yellow()) {
-        while(!is_it_black() && !is_it_yellow()) {
-            BT_turn(MOTOR_A, 15, MOTOR_B, -15);
+    bool find_road = true;//, on_left = false, on_right = false;
+    // stop until hit the intersection.
+    while (color_recognize() != 4 && color_recognize() != 5) {
+        // if the car is not on the road.
+        if(color_recognize() != 1) {
+            find_road = false;
+            // scan the left side until some degree or find the road
+            for(int i = 0; !find_road && i <= 29; i ++) {
+                BT_timed_motor_port_start_v2(MOTOR_B, 10, 2000);
+                BT_timed_motor_port_start_v2(MOTOR_A, -10, 2000);
+                BT_all_stop(0);
+                BT_timed_motor_port_start_v2(MOTOR_B, 10, 3000);
+                BT_timed_motor_port_start_v2(MOTOR_A, 10, 3000);
+                BT_all_stop(0);
+                if(color_recognize() != 1) {
+                    BT_timed_motor_port_start_v2(MOTOR_B, -10, 3000);
+                    BT_timed_motor_port_start_v2(MOTOR_A, -10, 3000);
+                    BT_all_stop(0);
+                } else {
+                    find_road = true;
+                    //on_left = true;
+                }
+            }
+            // if the road is not on the left, the scan right to find the road.
+            if(!find_road) {
+                BT_timed_motor_port_start_v2(MOTOR_B, 10, 6000);
+                BT_timed_motor_port_start_v2(MOTOR_A, -10, 6000);
+                BT_all_stop(0);
+                for(i = 0; !find_road && i <= 29; i ++) {
+                    // turn a small degree to the left
+                    BT_timed_motor_port_start_v2(MOTOR_B, -10, 2000);
+                    BT_timed_motor_port_start_v2(MOTOR_A, 10, 2000);
+                    BT_all_stop(0);
+                    BT_timed_motor_port_start_v2(MOTOR_B, 10, 3000);
+                    BT_timed_motor_port_start_v2(MOTOR_A, 10, 3000);
+                    BT_all_stop(0);
+                    if(color_recognize() != 1) {
+                        BT_timed_motor_port_start_v2(MOTOR_B, -10, 3000);
+                        BT_timed_motor_port_start_v2(MOTOR_A, -10, 3000);
+                        BT_all_stop(0);
+                    } else {
+                        find_road = true;
+                        //on_right = true;
+                    }
+                }
+            }
+            /*
+            // if the road is on the left.
+            if(on_left) {
+                BT_timed_motor_port_start_v2(MOTOR_B, 15, 2000);
+                BT_timed_motor_port_start_v2(MOTOR_A, 15, 2000);
+                on_left = false;
+            }
+
+            // if the road is on the left, then turn the left wheel to stay on the road.
+            // otherwise, turn to the original position and try to find the road on the right
+            if(color_recognize() == 1) {
+                BT_timed_motor_port_start(MOTOR_A, 10, 1000, 1000, 1000);
+                BT_motor_port_stop(MOTOR_B, 0);
+            } else {
+                BT_timed_motor_port_start(MOTOR_B, -10, 1000, 1000, 1000);
+                BT_motor_port_stop(MOTOR_B, 0);
+                // turn a small degree to the right
+                BT_timed_motor_port_start(MOTOR_A, 10, 1000, 1000, 1000);
+                BT_motor_port_stop(MOTOR_B, 0);
+                // if the road is not on enither side, then turn to the original position and find the road.
+                if(color_recognize() != 1) {
+
+                } else {
+                    BT_timed_motor_port_start(MOTOR_A, -10, 1000, 1000, 1000);
+                    BT_motor_port_stop(MOTOR_B, 0);
+                    find_street();
+                }
+            }*/
+        // if the car hit the wall, then turn 180
+        } else if(color_recognize() == 5) {
+            turn_180_degree();
+        } else {
+            // if not, then turn back and turn a small degree to the right
+            // do the same thing.
+            BT_drive(MOTOR_A, MOTOR_B, 20);
         }
-        BT_drive(MOTOR_A, MOTOR_B, 20);
+
     }
     BT_all_stop(0);
     return 0;
@@ -276,6 +366,8 @@ int scan_intersection(int *tl, int *tr, int *br, int *bl) {
     /************************************************************************************************************************
      *   TO DO  -   Complete this function
      ***********************************************************************************************************************/
+
+
 
     // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
     *(tl) = -1;
@@ -692,80 +784,47 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
  ***********************************************************************************************************************/
 
 /*!
- * test if the color is black.
- * @return 1 yes 0 no
+ * return the correct color.
+ * @return index represent color.
  */
-int is_it_black(void) {
-    BT_read_colour_sensor_RGB(PORT_1, rgb);
-    if((rgb[0] < 100 && rgb[1] < 100 && rgb[2] < 100) || (BT_read_colour_sensor(PORT_1) == 1)) {
-        return 1;
-    } else {
-        return 0;
-    }
+int color_recognize(void) {
+    return BT_read_colour_sensor(PORT_1);
 }
 
 /*!
- * test if the color is blue.
- * @return 1 yes 0 no
+ * turn a side 90 degree
+ * @param side 1 left 0 right
  */
-int is_it_blue(void) {
-    BT_read_colour_sensor_RGB(PORT_1, rgb);
-    if((rgb[0] < 100 && rgb[1] < 100 && rgb[2] > 100) || (BT_read_colour_sensor(PORT_1) == 2)) {
-        return 1;
-    } else {
-        return 0;
-    }
+void turn_90_degree_both_wheel(int side) {
+
 }
 
 /*!
- * test if the color is green
- * @return 1 yes 0 no
+ * turn a side 180 degree
  */
-int is_it_green(void){
-    BT_read_colour_sensor_RGB(PORT_1, rgb);
-    if((rgb[0] < 100 && rgb[1] > 100 && rgb[2] < 100) || (BT_read_colour_sensor(PORT_1) == 3)) {
-        return 1;
-    } else {
-        return 0;
-    }
+void turn_180_degree_both_wheel(void) {
+
 }
 
 /*!
- * test if the color is yellow
- * @return 1 yes 0 no
+ * turn a side 90 degree with one wheel
+ * @param port the motor which moves
+ * @param way 1 forward 0 backward
+ * @return 0 success -1 fail
  */
-int is_it_yellow(void) {
-    BT_read_colour_sensor_RGB(PORT_1, rgb);
-    if((rgb[0] > 100 && rgb[1] > 100 && rgb[2] < 100) || (BT_read_colour_sensor(PORT_1) == 4)) {
-        return 1;
+/*
+int turn_90_degree_one_wheel(char port, int way) {
+    while(color_recognize() != 5){
+        if(way == 1) {
+            BT_timed_motor_port_start(port, 20, 1000, 1000, 1000);
+        } else {
+            BT_timed_motor_port_start(port, -20, 1000, 1000, 1000);
+        }
+    }
+    BT_motor_port_stop(port, 0);
+    if(color_recognize() == 5) {
+        return -1;
     } else {
         return 0;
     }
-}
-
-/*!
- * test if the color is red.
- * @return 1 yes 0 no
- */
-int is_it_red(void) {
-    BT_read_colour_sensor_RGB(PORT_1, rgb);
-    if((rgb[0] > 100 && rgb[1] < 100 && rgb[2] < 100) || (BT_read_colour_sensor(PORT_1) == 5)) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-/*!
- * test if the color is white.
- * @return 1 yes 0 no
- */
-int is_it_white(void){
-    BT_read_colour_sensor_RGB(PORT_1, rgb);
-    if((rgb[0] > 100 && rgb[1] > 100 && rgb[2] > 100) || (BT_read_colour_sensor(PORT_1) == 6)) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
+}*/

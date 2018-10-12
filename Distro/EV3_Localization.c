@@ -229,7 +229,7 @@ int find_street(void) {
         // if the car hit the wall, turn 180
         if(color_recognize() == 5) {
             BT_all_stop(0);
-            turn_180_degree();
+            turn_180_degree_both_wheel();
         }
     }
     BT_all_stop(0);
@@ -276,7 +276,7 @@ int drive_along_street(void) {
                 BT_timed_motor_port_start_v2(MOTOR_B, 10, 6000);
                 BT_timed_motor_port_start_v2(MOTOR_A, -10, 6000);
                 BT_all_stop(0);
-                for(i = 0; !find_road && i <= 29; i ++) {
+                for(int i = 0; !find_road && i <= 29; i ++) {
                     // turn a small degree to the left
                     BT_timed_motor_port_start_v2(MOTOR_B, -10, 2000);
                     BT_timed_motor_port_start_v2(MOTOR_A, 10, 2000);
@@ -324,7 +324,7 @@ int drive_along_street(void) {
             }*/
         // if the car hit the wall, then turn 180
         } else if(color_recognize() == 5) {
-            turn_180_degree();
+            turn_180_degree_both_wheel();
         } else {
             // if not, then turn back and turn a small degree to the right
             // do the same thing.
@@ -422,7 +422,7 @@ int robot_localization(int *robot_x, int *robot_y, int *direction) {
      *  For each of the control functions, however, you will need to use the EV3 API, so be sure to become familiar with
      *  it.
      *
-     *  In terms of sensor management - the API allows you to read colours either as indexed values or RGB, it's up to
+     *  In terms of sensor management - the API allows you to read colours either as indexed values or rgb, it's up to
      *  you which one to use, and how to interpret the noisy, unreliable data you're likely to get from the sensor
      *  in order to update beliefs.
      *
@@ -666,7 +666,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
             if (R == 0 && G == 255 && B == 0) map[idx][0] = 3;
             else if (R == 0 && G == 0 && B == 255) map[idx][0] = 2;
             else if (R == 255 && G == 255 && B == 255) map[idx][0] = 6;
-            else fprintf(stderr, "Colour is not valid for intersection %d,%d, Top-Left RGB=%d,%d,%d\n", i, j, R, G, B);
+            else fprintf(stderr, "Colour is not valid for intersection %d,%d, Top-Left rgb=%d,%d,%d\n", i, j, R, G, B);
 
             // Top-right
             x += 2 * wx;
@@ -676,7 +676,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
             if (R == 0 && G == 255 && B == 0) map[idx][1] = 3;
             else if (R == 0 && G == 0 && B == 255) map[idx][1] = 2;
             else if (R == 255 && G == 255 && B == 255) map[idx][1] = 6;
-            else fprintf(stderr, "Colour is not valid for intersection %d,%d, Top-Right RGB=%d,%d,%d\n", i, j, R, G, B);
+            else fprintf(stderr, "Colour is not valid for intersection %d,%d, Top-Right rgb=%d,%d,%d\n", i, j, R, G, B);
 
             // Bottom-right
             y += 2 * wy;
@@ -687,7 +687,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
             else if (R == 0 && G == 0 && B == 255) map[idx][2] = 2;
             else if (R == 255 && G == 255 && B == 255) map[idx][2] = 6;
             else
-                fprintf(stderr, "Colour is not valid for intersection %d,%d, Bottom-Right RGB=%d,%d,%d\n", i, j, R, G,
+                fprintf(stderr, "Colour is not valid for intersection %d,%d, Bottom-Right rgb=%d,%d,%d\n", i, j, R, G,
                         B);
 
             // Bottom-left
@@ -699,7 +699,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
             else if (R == 0 && G == 0 && B == 255) map[idx][3] = 2;
             else if (R == 255 && G == 255 && B == 255) map[idx][3] = 6;
             else
-                fprintf(stderr, "Colour is not valid for intersection %d,%d, Bottom-Left RGB=%d,%d,%d\n", i, j, R, G,
+                fprintf(stderr, "Colour is not valid for intersection %d,%d, Bottom-Left rgb=%d,%d,%d\n", i, j, R, G,
                         B);
 
             fprintf(stderr, "Colours for this intersection: %d, %d, %d, %d\n", map[idx][0], map[idx][1], map[idx][2],
@@ -713,7 +713,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
 
 unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
     // Reads an image from a .ppm file. A .ppm file is a very simple image representation
-    // format with a text header followed by the binary RGB data at 24bits per pixel.
+    // format with a text header followed by the binary rgb data at 24bits per pixel.
     // The header has the following form:
     //
     // P6
@@ -728,7 +728,7 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
     // as number of pixels in x and number of pixels in y.
     // The final line of the header stores the maximum value for pixels in the image,
     // usually 255.
-    // After this last header line, binary data stores the RGB values for each pixel
+    // After this last header line, binary data stores the rgb values for each pixel
     // in row-major order. Each pixel requires 3 bytes ordered R, G, and B.
     //
     // NOTE: Windows file handling is rather crotchetty. You may have to change the
@@ -741,7 +741,7 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
     char line[1024];
     int i;
     unsigned char *tmp;
-    double *fRGB;
+    double *frgb;
 
     im = NULL;
     f = fopen(filename, "rb+");
@@ -828,3 +828,49 @@ int turn_90_degree_one_wheel(char port, int way) {
         return 0;
     }
 }*/
+
+int Distinguish_Color(double possibility[6]) {
+    /*This function read the sensor and return the most likely color
+     * and calculate the possibility of others
+     */
+    BT_read_colour_sensor_RGB(PORT_1, rgb);
+    printf("sensor value: R %i B %i G %i \n", rgb[0], rgb[1], rgb[2]);
+
+    int Black_Error = pow(Black[0] - rgb[0], 2) + pow(Black[1] - rgb[1], 2) + pow(Black[2] - rgb[2], 2);
+    int Blue_Error = pow(Blue[0] - rgb[0], 2) + pow(Blue[1] - rgb[1], 2) + pow(Blue[2] - rgb[2], 2);
+    int Green_Error = pow(Green[0] - rgb[0], 2) + pow(Green[1] - rgb[1], 2) + pow(Green[2] - rgb[2], 2);
+    int Yellow_Error = pow(Yellow[0] - rgb[0], 2) + pow(Yellow[1] - rgb[1], 2) + pow(Yellow[2] - rgb[2], 2);
+    int Red_Error = pow(Red[0] - rgb[0], 2) + pow(Red[1] - rgb[1], 2) + pow(Red[2] - rgb[2], 2);
+    int White_Error = pow(White[0] - rgb[0], 2) + pow(White[1] - rgb[1], 2) + pow(White[2] - rgb[2], 2);
+    int Sum_Of_Square_Error = Black_Error + Blue_Error + Green_Error + Yellow_Error + Red_Error + White_Error;
+
+    possibility[1] = ((double) Sum_Of_Square_Error - (double) Black_Error) / (double) Sum_Of_Square_Error;
+    possibility[2] = ((double) Sum_Of_Square_Error - (double) Blue_Error) / (double) Sum_Of_Square_Error;
+    possibility[3] = ((double) Sum_Of_Square_Error - (double) Green_Error) / (double) Sum_Of_Square_Error;
+    possibility[4] = ((double) Sum_Of_Square_Error - (double) Yellow_Error) / (double) Sum_Of_Square_Error;
+    possibility[5] = ((double) Sum_Of_Square_Error - (double) Red_Error) / (double) Sum_Of_Square_Error;
+    possibility[6] = ((double) Sum_Of_Square_Error - (double) White_Error) / (double) Sum_Of_Square_Error;
+
+    printf("Black SQUARE ERROR is %i\n", Black_Error);
+    printf("Blue SQUARE ERROR is %i\n", Blue_Error);
+    printf("Green SQUARE ERROR is %i\n", Green_Error);
+    printf("Yellow SQUARE ERROR is %i\n", Yellow_Error);
+    printf("RED SQUARE ERROR is %i\n", Red_Error);
+    printf("White SQUARE ERROR is %i\n", White_Error);
+    printf("prossibility of Black is %2f\n", possibility[1]);
+    printf("prossibility of Blue is %2f\n", possibility[2]);
+    printf("prossibility of Green is %2f\n", possibility[3]);
+    printf("prossibility of Yellow is %2f\n", possibility[4]);
+    printf("prossibility of Red is %2f\n", possibility[5]);
+    printf("prossibility of White is %2f\n", possibility[6]);
+
+    for (int i = 1; i < 7; i++) {
+        if (possibility[i] > 0.98) {
+            possibility[0] = i;
+            return possibility[0];
+        }
+    }
+    possibility[0] = 2;
+    return possibility[0];
+
+}

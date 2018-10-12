@@ -97,6 +97,8 @@ void turn_90_degree_both_wheel(int);
 
 void turn_180_degree_both_wheel(void);
 
+int Distinguish_Color(double possibility[6]);
+
 //int turn_90_degree_one_wheel(char);
 
 #endif

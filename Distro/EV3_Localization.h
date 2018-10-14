@@ -74,7 +74,6 @@ code that you have to complete in order to implement the localization algorithms
 #endif
 
 
-
 int parse_map(unsigned char *map_img, int rx, int ry);
 
 int robot_localization(int *robot_x, int *robot_y, int *direction);
@@ -99,13 +98,13 @@ void turn_90_degree_both_wheel(int);
 
 void turn_180_degree_both_wheel(void);
 
-int Distinguish_Color(int rgb[3]);
+int Distinguish_Color();
 
 void turn_left_small(void);
 
 void turn_right_small(void);
 
-void Read_sensor(int rgb[3]);
+void Read_sensor(void);
 
 
 //int turn_90_degree_one_wheel(char);

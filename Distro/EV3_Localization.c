@@ -94,7 +94,7 @@ int map[400][4];            // This holds the representation of the map, up to 2
                             // intersection.
 int sx, sy;                 // Size of the map (number of intersections along x and y)
 double beliefs[400][4];     // Beliefs for each location and motion direction
-
+int rgb[3];
 double possibility[8];
 
 #define FILE_NAME "rgb.dat" //save for RGB initial value
@@ -107,6 +107,7 @@ int main(int argc, char *argv[]) {
     char mapname[1024];
     int dest_x, dest_y, rx, ry;
     unsigned char *map_image;
+
 
     //read the RGB initail value from rgb.dat
     FILE *fp;
@@ -151,16 +152,10 @@ int main(int argc, char *argv[]) {
                 "    dest_x, dest_y - target location for the bot within the map, -1 -1 calls calibration routine\n");
         exit(1);
     }
+
     strcpy(&mapname[0], argv[1]);
     dest_x = atoi(argv[2]);
     dest_y = atoi(argv[3]);
-
-    if (dest_x==-1&&dest_y==-1) {
-        calibrate_sensor();
-        BT_close();
-        free(map_image);
-        exit(1);
-    }
 
     /******************************************************************************************************************
     * OPTIONAL TO DO: If you added code for sensor calibration, add just below this comment block any code needed to
@@ -182,6 +177,27 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    /******************************************************************************************************************
+    * Bluetooth open, then calibrate sensor.
+    * ****************************************************************************************************************/
+
+    // Open a socket to the EV3 for remote controlling the bot.
+    if (BT_open(HEXKEY) != 0) {
+        fprintf(stderr, "Unable to open comm socket to the EV3, make sure the EV3 kit is powered on, and that the\n");
+        fprintf(stderr, " hex key for the EV3 matches the one in EV3_Localization.h\n");
+        free(map_image);
+        exit(1);
+    }
+
+    fprintf(stderr, "All set, ready to go!\n");
+
+    if (dest_x == -1 && dest_y == -1) {
+        calibrate_sensor();
+        BT_close();
+        free(map_image);
+        exit(1);
+    }
+
     if (dest_x < 0 || dest_x >= sx || dest_y < 0 || dest_y >= sy) {
         fprintf(stderr, "Destination location is outside of the map\n");
         free(map_image);
@@ -197,15 +213,7 @@ int main(int argc, char *argv[]) {
             beliefs[i + (j * sx)][3] = 1.0 / (double) (sx * sy * 4);
         }
     }
-    // Open a socket to the EV3 for remote controlling the bot.
-    if (BT_open(HEXKEY) != 0) {
-        fprintf(stderr, "Unable to open comm socket to the EV3, make sure the EV3 kit is powered on, and that the\n");
-        fprintf(stderr, " hex key for the EV3 matches the one in EV3_Localization.h\n");
-        free(map_image);
-        exit(1);
-    }
 
-    fprintf(stderr, "All set, ready to go!\n");
 
     /*******************************************************************************************************************************
     *
@@ -244,20 +252,21 @@ int main(int argc, char *argv[]) {
     *******************************************************************************************************************************/
 
     // HERE - write code to call robot_localization() and go_to_target() as needed, any additional logic required to get the
-    //        robot to complete its task should be here.
+    // robot to complete its task should be here.
+    /*for(int i = 0; i <= 3; i ++){
+        drive_along_street();
+        printf("finish %i*************************************************************************************\n", i);
+        for(int i = 0; i <= 1000000000; i ++);
+        turn_90_degree_both_wheel(0);
+        for(int i = 0; i <= 1000000000; i ++);
+        BT_timed_motor_port_start(MOTOR_B | MOTOR_A, 10, 100, 1000, 100);
+        for(int i = 0; i <= 1000000000; i ++);
+    }*/
 
-    //turn_180_degree_both_wheel();
+    //turn_90_degree_both_wheel(0);
 
-    //BT_drive(MOTOR_A, MOTOR_B, 10);
-    //BT_all_stop(0);
+    Distinguish_Color();
 
-    //turn_90_degree_both_wheel(1);
-
-    drive_along_street();
-    //BT_all_stop(0);
-
-    //drive_along_street();
-    //turn_180_degree_both_wheel();
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
     BT_close();
     free(map_image);
@@ -273,10 +282,10 @@ int main(int argc, char *argv[]) {
 int find_street(void) {
     // go across the map until find the road
     int rgb[3];
-    while(Distinguish_Color(rgb) != 1 && Distinguish_Color(rgb) != 4) {
+    while(Distinguish_Color() != 1 && Distinguish_Color() != 4) {
         BT_drive(MOTOR_A, MOTOR_B, 10);
         // if the car hit the wall, turn 180
-        if(Distinguish_Color(rgb) == 5) {
+        if(Distinguish_Color() == 5) {
             BT_timed_motor_port_start(MOTOR_A, -25, 1000, 20000, 2000);
             BT_timed_motor_port_start(MOTOR_B, -25, 1000, 20000, 2000);
             turn_180_degree_both_wheel();
@@ -298,31 +307,62 @@ int find_street(void) {
  * @return int, 1 fail 0 success
  */
 int drive_along_street(void) {
-    int rgb[3];
+    int rgb[3], counter = 1;
     bool find_road = true;//, on_left = false, on_right = false;
     // stop until hit the intersection.
-    while (Distinguish_Color(rgb) != 4 && Distinguish_Color(rgb) != 5) {
+    while (Distinguish_Color() != 4 && Distinguish_Color() != 5) {
 
         // if the car is not on the road.
-        if(Distinguish_Color(rgb) != 1) {
-            // turn left slightly
-            for(int i = 0; Distinguish_Color(rgb) != 1 && i <= 1; i ++) {
-                turn_left_small();
-                for(int i = 0; i <= 1000000000; i ++);
-                turn_left_small();
-                for(int i = 0; i <= 1000000000; i ++);
-                if(Distinguish_Color(rgb) != 1) {
-                    BT_timed_motor_port_start_v2(MOTOR_B | MOTOR_A, 8, 500);
+        if(Distinguish_Color() != 1) {
+            find_road = true;
+            while(Distinguish_Color() != 1) {
+                BT_motor_port_start(MOTOR_B | MOTOR_A, -8);
+            }
+            while(find_road) {
+                for (int i = 0; i <= 2; i++) {
+                    turn_left_small();
+                    for (int i = 0; i <= 1000000000; i++);
+                    BT_timed_motor_port_start_v2(MOTOR_B | MOTOR_A, 8, 1500);
+                    for (int i = 0; i <= 1000000000; i++);
+                    if (Distinguish_Color() == 1) {
+                        find_road = false;
+                        break;
+                    } else {
+                        while (Distinguish_Color() != 1) {
+                            BT_motor_port_start(MOTOR_B | MOTOR_A, -8);
+                        }
+                    }
                 }
-                for(int i = 0; i <= 1000000000; i ++);
-                if(Distinguish_Color(rgb) != 1) {
-                    BT_timed_motor_port_start_v2(MOTOR_B | MOTOR_A, -8, 500);
+                // if the car find the road, then turn
+                if(!find_road) {
+                    turn_right_small();
+                    for (int i = 0; i <= 1000000000; i++);
+                } else {
+                    BT_timed_motor_port_start(MOTOR_A, 30, 100, 500, 100);
+                    BT_timed_motor_port_start(MOTOR_B, -30, 100, 500, 100);
+                    for (int i = 0; i <= 1000000000; i++);
                 }
-                for(int i = 0; i <= 1000000000; i ++);
+
+                //BT_timed_motor_port_start_v2();
+                for (int i = 0; find_road && i <= 2; i++) {
+                    turn_right_small();
+                    for (int i = 0; i <= 1000000000; i++);
+                    BT_timed_motor_port_start_v2(MOTOR_B | MOTOR_A, 8, 1500);
+                    for (int i = 0; i <= 1000000000; i++);
+                    if (Distinguish_Color() == 1) {
+                        find_road = false;
+                        break;
+                    } else {
+                        while (Distinguish_Color() != 1) {
+                            BT_motor_port_start(MOTOR_B | MOTOR_A, -8);
+                        }
+                    }
+                }
+                for (int i = 0; i <= 1000000000; i++);
             }
 
         // if the car hit the wall, then turn 180
-        } else if(Distinguish_Color(rgb) == 5) {
+        } else if(Distinguish_Color() == 5) {
             turn_180_degree_both_wheel();
         } else {
             // if not, then turn back and turn a small degree to the right
@@ -493,11 +533,11 @@ void calibrate_sensor(void) {
      *
      * How to do this part is up to you, but feel free to talk with your TA and instructor about it!
      */
-    int rgb[3];
 
     /************************************************************************************************************************
      *   OIPTIONAL TO DO  -   Complete this function
      ***********************************************************************************************************************/
+
     printf("=Select which the colour you want to calibration =\n");
     printf("1 Black  calibration,Please enter: b\n");
     printf("2 Blue   calibration,Please enter: u\n");
@@ -507,13 +547,13 @@ void calibrate_sensor(void) {
     printf("6 White  calibration,Please enter: w\n");
     printf("Q Exit   calibration,Please enter: q\n");
     printf("=Select which the colour you want to calibration =\n");
-    char c;
-    while ((c = getchar()) != 'q') {
+    char c = getchar();
+    while (c != 'q') {
         getchar();
         switch (c) {
             case 'b':
                 printf("1 Black  calibration\n");
-                Read_sensor(rgb);
+                Read_sensor();
                 Black[0] = rgb[0];
                 Black[1] = rgb[1];
                 Black[2] = rgb[2];
@@ -521,7 +561,7 @@ void calibrate_sensor(void) {
                 break;
             case 'u':
                 printf("2 Blue   calibration\n");
-                Read_sensor(rgb);
+                Read_sensor();
                 Blue[0] = rgb[0];
                 Blue[1] = rgb[1];
                 Blue[2] = rgb[2];
@@ -529,7 +569,7 @@ void calibrate_sensor(void) {
                 break;
             case 'g':
                 printf("3 Green  calibration\n");
-                Read_sensor(rgb);
+                Read_sensor();
                 Green[0] = rgb[0];
                 Green[1] = rgb[1];
                 Green[2] = rgb[2];
@@ -537,7 +577,7 @@ void calibrate_sensor(void) {
                 break;
             case 'y':
                 printf("4 Yellow calibration\n");
-                Read_sensor(rgb);
+                Read_sensor();
                 Yellow[0] = rgb[0];
                 Yellow[1] = rgb[1];
                 Yellow[2] = rgb[2];
@@ -545,7 +585,7 @@ void calibrate_sensor(void) {
                 break;
             case 'r':
                 printf("5 Red    calibration\n");
-                Read_sensor(rgb);
+                Read_sensor();
                 Red[0] = rgb[0];
                 Red[1] = rgb[1];
                 Red[2] = rgb[2];
@@ -553,7 +593,7 @@ void calibrate_sensor(void) {
                 break;
             case 'w':
                 printf("6 White  calibrationU\n");
-                Read_sensor(rgb);
+                Read_sensor();
                 White[0] = rgb[0];
                 White[1] = rgb[1];
                 White[2] = rgb[2];
@@ -572,7 +612,7 @@ void calibrate_sensor(void) {
         printf("6 White  calibration,Please enter: w\n");
         printf("Q Exit   calibration,Please enter: q\n");
         printf("=================================================\n");
-
+        c = getchar();
 
     }
     //save the initail value
@@ -885,11 +925,11 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
  */
 void turn_90_degree_both_wheel(int side) {
     if(side == 1) {
-        BT_timed_motor_port_start(MOTOR_B, 10, 1000, 2000, 1000);
-        BT_timed_motor_port_start(MOTOR_A, -10, 1000, 2000, 1000);
+        BT_timed_motor_port_start(MOTOR_B, 10, 100, 3000, 100);
+        BT_timed_motor_port_start(MOTOR_A, -10, 100, 3000, 100);
     } else {
-        BT_timed_motor_port_start(MOTOR_A, 10, 1000, 2000, 3000);
-        BT_timed_motor_port_start(MOTOR_B, -10, 1000, 2000, 3000);
+        BT_timed_motor_port_start(MOTOR_A, 10, 100, 3000, 100);
+        BT_timed_motor_port_start(MOTOR_B, -10, 100, 3000, 100);
     }
 }
 
@@ -906,7 +946,7 @@ void turn_180_degree_both_wheel(void) {
     BT_timed_motor_port_start(MOTOR_A, -10, 1000, 5500, 5000);
 }
 
-int Distinguish_Color(int rgb[3]) {
+int Distinguish_Color(void) {
     /*This function read the sensor and return the most likely color
      * and calculate the possibility of others
      */
@@ -923,7 +963,12 @@ int Distinguish_Color(int rgb[3]) {
     int Yellow_Error = pow(Yellow[0] - rgb[0], 2) + pow(Yellow[1] - rgb[1], 2) + pow(Yellow[2] - rgb[2], 2);
     int Red_Error = pow(Red[0] - rgb[0], 2) + pow(Red[1] - rgb[1], 2) + pow(Red[2] - rgb[2], 2);
     int White_Error = pow(White[0] - rgb[0], 2) + pow(White[1] - rgb[1], 2) + pow(White[2] - rgb[2], 2);
-    double Sum_Of_Square_Error = sqrt((double)Black_Error) + sqrt((double)Blue_Error) + sqrt((double)Green_Error) + sqrt((double)Yellow_Error) +sqrt((double)Red_Error) + sqrt((double)White_Error);
+    double Sum_Of_Square_Error = sqrt((double)Black_Error) +
+                                 sqrt((double)Blue_Error) +
+                                 sqrt((double)Green_Error) +
+                                 sqrt((double)Yellow_Error) +
+                                 sqrt((double)Red_Error) +
+                                 sqrt((double)White_Error);
 
 
     possibility[1] = (Sum_Of_Square_Error - sqrt((double) Black_Error)) / Sum_Of_Square_Error;
@@ -932,12 +977,14 @@ int Distinguish_Color(int rgb[3]) {
     possibility[4] = (Sum_Of_Square_Error - sqrt((double) Yellow_Error)) / Sum_Of_Square_Error;
     possibility[5] = (Sum_Of_Square_Error - sqrt((double) Red_Error)) / Sum_Of_Square_Error;
     possibility[6] = (Sum_Of_Square_Error - sqrt((double) White_Error)) / Sum_Of_Square_Error;
+
+    /*
     printf("prossibility of Black is %2f\n", possibility[1]);
     printf("prossibility of Blue is %2f\n", possibility[2]);
     printf("prossibility of Green is %2f\n", possibility[3]);
     printf("prossibility of Yellow is %2f\n", possibility[4]);
     printf("prossibility of Red is %2f\n", possibility[5]);
-    printf("prossibility of White is %2f\n", possibility[6]);
+    printf("prossibility of White is %2f\n", possibility[6]);*/
 
     double max=-1;
     int colour_value=1;
@@ -963,13 +1010,10 @@ void turn_right_small(void) {
     BT_timed_motor_port_start(MOTOR_B, -30, 100, 100, 100);
 }
 
-void Read_sensor(int rgb[3]) {
+void Read_sensor(void) {
     int sum[]={0,0,0};
-    printf("read color... \n");
     for(int i=0;i<10;i++){
-        printf("read color... \n");
         BT_read_colour_sensor_RGB(PORT_1, rgb);
-        printf("read color... \n");
         printf("sensor value: R %i B %i G %i \n", rgb[0], rgb[1], rgb[2]);
         sum[0]=sum[0]+rgb[0];
         sum[1]=sum[1]+rgb[1];

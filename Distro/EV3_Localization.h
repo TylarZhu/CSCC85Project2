@@ -104,7 +104,15 @@ void turn_left_small(void);
 
 void turn_right_small(void);
 
+void forward_small(void);
+
 void Read_sensor(void);
+
+void find_road(void);
+
+void turn_upright(int);
+
+void turn_backwards(void);
 
 
 //int turn_90_degree_one_wheel(char);

@@ -98,6 +98,14 @@ int rgb[3];
 double possibility[8];
 
 #define FILE_NAME "rgb.dat" //save for RGB initial value
+#define ROBOT_INIT 0
+#define ON_THE_ROAD 1
+#define FIND_ROAD 2
+#define ADJUST 3
+#define FIND_YELLOW 4
+#define FIND_RED 5
+#define ROBOT_STOP 6
+
 
 int Black[3],Blue[3],Green[3],Yellow[3],Red[3],White[3];
 int Distinguish_Color();
@@ -263,10 +271,12 @@ int main(int argc, char *argv[]) {
         for(int i = 0; i <= 1000000000; i ++);
     }*/
 
-    //turn_90_degree_both_wheel(0);
+    drive_along_street();
 
-    Distinguish_Color();
-
+    //drive_along_street();
+    //Distinguish_Color();
+    //turn_left_small();
+    //drive_along_street();
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
     BT_close();
     free(map_image);
@@ -280,19 +290,6 @@ int main(int argc, char *argv[]) {
  * @return int, 1 success 0 fail
  */
 int find_street(void) {
-    // go across the map until find the road
-    int rgb[3];
-    while(Distinguish_Color() != 1 && Distinguish_Color() != 4) {
-        BT_drive(MOTOR_A, MOTOR_B, 10);
-        // if the car hit the wall, turn 180
-        if(Distinguish_Color() == 5) {
-            BT_timed_motor_port_start(MOTOR_A, -25, 1000, 20000, 2000);
-            BT_timed_motor_port_start(MOTOR_B, -25, 1000, 20000, 2000);
-            turn_180_degree_both_wheel();
-        }
-    }
-    BT_all_stop(0);
-    turn_90_degree_both_wheel(1);
     return 1;
 }
 
@@ -307,71 +304,118 @@ int find_street(void) {
  * @return int, 1 fail 0 success
  */
 int drive_along_street(void) {
-    int rgb[3], counter = 1;
-    bool find_road = true;//, on_left = false, on_right = false;
-    // stop until hit the intersection.
-    while (Distinguish_Color() != 4 && Distinguish_Color() != 5) {
-
-        // if the car is not on the road.
-        if(Distinguish_Color() != 1) {
-            find_road = true;
-            while(Distinguish_Color() != 1) {
-                BT_motor_port_start(MOTOR_B | MOTOR_A, -8);
-            }
-            while(find_road) {
-                for (int i = 0; i <= 2; i++) {
-                    turn_left_small();
-                    for (int i = 0; i <= 1000000000; i++);
-                    BT_timed_motor_port_start_v2(MOTOR_B | MOTOR_A, 8, 1500);
-                    for (int i = 0; i <= 1000000000; i++);
-                    if (Distinguish_Color() == 1) {
-                        find_road = false;
-                        break;
-                    } else {
-                        while (Distinguish_Color() != 1) {
-                            BT_motor_port_start(MOTOR_B | MOTOR_A, -8);
-                        }
-                    }
-                }
-                // if the car find the road, then turn
-                if(!find_road) {
-                    turn_right_small();
-                    for (int i = 0; i <= 1000000000; i++);
+    int state = ROBOT_INIT, step_num = 0, step_yellow = 0, left_num = 0, right_num = 0;
+    bool stop = false;
+    while(!stop) {
+        switch (state) {
+            case ROBOT_INIT:
+                step_num = 0;
+                printf("robot init !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                // go across the map until find the road
+                if(Distinguish_Color() != 1 && Distinguish_Color() != 4 && Distinguish_Color() != 5) {
+                    BT_drive(MOTOR_A, MOTOR_B, 10);
+                    state = ROBOT_INIT;
+                    // if the car hit the wall, turn 180
+                } else if (Distinguish_Color() == 5) {
+                    BT_all_stop(1);
+                    state = FIND_RED;
+                } else if (Distinguish_Color() == 4) {
+                    BT_all_stop(1);
+                    state = FIND_YELLOW;
                 } else {
-                    BT_timed_motor_port_start(MOTOR_A, 30, 100, 500, 100);
-                    BT_timed_motor_port_start(MOTOR_B, -30, 100, 500, 100);
-                    for (int i = 0; i <= 1000000000; i++);
+                    BT_all_stop(1);
+                    state = ON_THE_ROAD;
                 }
+                break;
 
-                //BT_timed_motor_port_start_v2();
-                for (int i = 0; find_road && i <= 2; i++) {
-                    turn_right_small();
-                    for (int i = 0; i <= 1000000000; i++);
-                    BT_timed_motor_port_start_v2(MOTOR_B | MOTOR_A, 8, 1500);
-                    for (int i = 0; i <= 1000000000; i++);
-                    if (Distinguish_Color() == 1) {
-                        find_road = false;
+            case ON_THE_ROAD:
+                step_num = 0;
+                printf("ON THE ROAD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                if(Distinguish_Color() == 1) {
+                    BT_motor_port_start(MOTOR_A | MOTOR_B, 10);
+                    state = ON_THE_ROAD;
+                    //break;
+                } else if(Distinguish_Color() == 4 && step_yellow < 3) {
+                    BT_all_stop(1);
+                    state = FIND_YELLOW;
+                    step_yellow += 1;
+                } else if(Distinguish_Color() == 5) {
+                    BT_all_stop(1);
+                    state = FIND_RED;
+                } else if(step_yellow >= 3) {
+                    BT_all_stop(1);
+                    state = ROBOT_STOP;
+                } else {
+                    BT_all_stop(1);
+                    left_num = 0;
+                    right_num = 0;
+                    state = ADJUST;
+                }
+                break;
+
+            case FIND_ROAD:
+                printf("find road !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                turn_backwards();
+                turn_left_small();
+                forward_small();
+                if (Distinguish_Color() == 1 || Distinguish_Color() == 4 || Distinguish_Color() == 5) {
+                    state = ON_THE_ROAD;
+                    break;
+                }
+                state = FIND_ROAD;
+                break;
+
+            case ADJUST:
+                printf("ADJUST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                if(Distinguish_Color() != 1) {
+                    turn_backwards();
+                    state = ADJUST;
+                    break;
+                }
+                if(Distinguish_Color() == 1) {
+                    if(left_num < 2) {
+                        turn_left_small();
+                        left_num += 1;
+                    } else if(right_num < 2){
+                        turn_right_small();
+                        right_num += 1;
+                    }
+                    forward_small();
+                    if(Distinguish_Color() != 1) {
+                        state = ADJUST;
                         break;
                     } else {
-                        while (Distinguish_Color() != 1) {
-                            BT_motor_port_start(MOTOR_B | MOTOR_A, -8);
-                        }
+                        state = ON_THE_ROAD;
+                        printf("FOUND SUCCESS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                        break;
                     }
                 }
-                for (int i = 0; i <= 1000000000; i++);
-            }
+                break;
 
-        // if the car hit the wall, then turn 180
-        } else if(Distinguish_Color() == 5) {
-            turn_180_degree_both_wheel();
-        } else {
-            // if not, then turn back and turn a small degree to the right
-            // do the same thing.
-            BT_drive(MOTOR_A, MOTOR_B, 12);
+            case FIND_RED:
+                printf("find RED !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                if(step_num < 2) {
+                    turn_90_degree_both_wheel(0);
+                    step_num += 1;
+                    state = FIND_RED;
+                    break;
+                }
+                forward_small();
+                forward_small();
+                state = ROBOT_INIT;
+                break;
+            case FIND_YELLOW:
+                printf("find yellow !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                turn_90_degree_both_wheel(0);
+                forward_small();
+                forward_small();
+                state = ROBOT_INIT;
+                break;
+            case ROBOT_STOP:
+                stop = true;
+                break;
         }
-
     }
-    BT_all_stop(0);
     return 0;
 }
 
@@ -517,22 +561,22 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
     return (0);
 }
 
+/*!
+ * This function is called when the program is started with -1  -1 for the target location.
+ *
+ * You DO NOT NEED TO IMPLEMENT ANYTHING HERE - but it is strongly recommended as good calibration will make sensor
+ * readings more reliable and will make your code more resistent to changes in illumination, map quality, or battery
+ * level.
+ *
+ * The principle is - Your code should allow you to sample the different colours in the map, and store representative
+ * values that will help you figure out what colours the sensor is reading given the current conditions.
+ *
+ * Inputs - None
+ * Return values - None - your code has to save the calibration information to a file, for later use (see in main())
+ *
+ * How to do this part is up to you, but feel free to talk with your TA and instructor about it!
+ */
 void calibrate_sensor(void) {
-    /*
-     * This function is called when the program is started with -1  -1 for the target location.
-     *
-     * You DO NOT NEED TO IMPLEMENT ANYTHING HERE - but it is strongly recommended as good calibration will make sensor
-     * readings more reliable and will make your code more resistent to changes in illumination, map quality, or battery
-     * level.
-     *
-     * The principle is - Your code should allow you to sample the different colours in the map, and store representative
-     * values that will help you figure out what colours the sensor is reading given the current conditions.
-     *
-     * Inputs - None
-     * Return values - None - your code has to save the calibration information to a file, for later use (see in main())
-     *
-     * How to do this part is up to you, but feel free to talk with your TA and instructor about it!
-     */
 
     /************************************************************************************************************************
      *   OIPTIONAL TO DO  -   Complete this function
@@ -925,12 +969,13 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
  */
 void turn_90_degree_both_wheel(int side) {
     if(side == 1) {
-        BT_timed_motor_port_start(MOTOR_B, 10, 100, 3000, 100);
-        BT_timed_motor_port_start(MOTOR_A, -10, 100, 3000, 100);
+        BT_timed_motor_port_start(MOTOR_B, 30, 80, 750, 80);
+        BT_timed_motor_port_start(MOTOR_A, -30, 80, 750, 80);
     } else {
-        BT_timed_motor_port_start(MOTOR_A, 10, 100, 3000, 100);
-        BT_timed_motor_port_start(MOTOR_B, -10, 100, 3000, 100);
+        BT_timed_motor_port_start(MOTOR_A, 30, 80, 750, 80);
+        BT_timed_motor_port_start(MOTOR_B, -30, 80, 750, 80);
     }
+    for(int i = 0; i <= 1000000000; i ++);
 }
 
 /*!
@@ -944,6 +989,7 @@ void turn_180_degree_both_wheel(void) {
     printf("Good2************************************************\n");
     BT_timed_motor_port_start(MOTOR_B, 10, 1000, 5500, 5000);
     BT_timed_motor_port_start(MOTOR_A, -10, 1000, 5500, 5000);
+    for(int i = 0; i <= 1000000000; i ++);
 }
 
 int Distinguish_Color(void) {
@@ -1001,15 +1047,45 @@ int Distinguish_Color(void) {
 }
 
 void turn_left_small(void) {
-    BT_timed_motor_port_start(MOTOR_B, 30, 100, 100, 100);
-    BT_timed_motor_port_start(MOTOR_A, -30, 100, 100, 100);
+    BT_timed_motor_port_start(MOTOR_B, 30, 80, 80, 80);
+    BT_timed_motor_port_start(MOTOR_A, -30, 80, 80, 80);
+    for(int i = 0; i <= 1000000000; i ++);
 }
 
 void turn_right_small(void) {
-    BT_timed_motor_port_start(MOTOR_A, 30, 100, 100, 100);
-    BT_timed_motor_port_start(MOTOR_B, -30, 100, 100, 100);
+    BT_timed_motor_port_start(MOTOR_A, 30, 80, 80, 80);
+    BT_timed_motor_port_start(MOTOR_B, -30, 80, 80, 80);
+    for(int i = 0; i <= 1000000000; i ++);
 }
 
+void forward_small(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 30, 80, 100, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+/*!
+ * find road turn the robot upright after find road left
+ */
+void turn_upright(int side) {
+    if(side == 1) {
+        BT_timed_motor_port_start(MOTOR_A, 30, 80, 600, 80);
+        BT_timed_motor_port_start(MOTOR_B, -30, 80, 600, 80);
+    } else {
+        BT_timed_motor_port_start(MOTOR_B, 30, 80, 600, 80);
+        BT_timed_motor_port_start(MOTOR_A, -30, 80, 600, 80);
+    }
+
+}
+
+void turn_backwards(void) {
+    while(Distinguish_Color() != 1) {
+        BT_motor_port_start(MOTOR_A | MOTOR_B, -8);
+    }
+}
+
+/*!
+ * get the average of the color
+ */
 void Read_sensor(void) {
     int sum[]={0,0,0};
     for(int i=0;i<10;i++){
@@ -1026,5 +1102,9 @@ void Read_sensor(void) {
     rgb[2] = (int)(sum[2]/10);
 
     printf("A_RGB %i %i %i\n",rgb[0],rgb[1],rgb[2]);
+}
+
+void find_road(void) {
+
 }
 

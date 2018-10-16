@@ -304,27 +304,30 @@ int find_street(void) {
  * @return int, 1 fail 0 success
  */
 int drive_along_street(void) {
-    int state = ROBOT_INIT, step_num = 0, step_yellow = 0, left_num = 0, right_num = 0;
+    int state = ROBOT_INIT, step_num = 0, step_yellow = 0, left_num = 0, right_num = 0, turn_limit = 2;
     bool stop = false;
     while(!stop) {
         switch (state) {
             case ROBOT_INIT:
                 step_num = 0;
                 printf("robot init !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                // go across the map until find the road
+                // go across the map until find the road, hit a intersection or wall
                 if(Distinguish_Color() != 1 && Distinguish_Color() != 4 && Distinguish_Color() != 5) {
                     BT_drive(MOTOR_A, MOTOR_B, 10);
                     state = ROBOT_INIT;
-                    // if the car hit the wall, turn 180
+                // if the robot hit the wall, turn 180
                 } else if (Distinguish_Color() == 5) {
                     BT_all_stop(1);
                     state = FIND_RED;
+                // if the robot find the intersection, then go to find yellow state.
                 } else if (Distinguish_Color() == 4) {
                     BT_all_stop(1);
                     state = FIND_YELLOW;
+                // if the robot finds street and it is the first time,
+                // then adjust the robot parallel to the street.
                 } else {
                     BT_all_stop(1);
-                    state = ON_THE_ROAD;
+                    state = FIND_ROAD;
                 }
                 break;
 
@@ -355,14 +358,17 @@ int drive_along_street(void) {
 
             case FIND_ROAD:
                 printf("find road !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                turn_backwards();
-                turn_left_small();
                 forward_small();
                 if (Distinguish_Color() == 1 || Distinguish_Color() == 4 || Distinguish_Color() == 5) {
                     state = ON_THE_ROAD;
                     break;
+                } else {
+                    turn_backwards();
+                    turn_left_small();
+                    forward_small();
+                    state = FIND_ROAD;
                 }
-                state = FIND_ROAD;
+
                 break;
 
             case ADJUST:
@@ -373,21 +379,40 @@ int drive_along_street(void) {
                     break;
                 }
                 if(Distinguish_Color() == 1) {
-                    if(left_num < 2) {
+                    if(left_num < turn_limit) {
+                        printf("TURN LEFT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
                         turn_left_small();
                         left_num += 1;
-                    } else if(right_num < 2){
+                    } else if(right_num < 2 * turn_limit){
+                        printf("TURN RIGHT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
                         turn_right_small();
                         right_num += 1;
                     }
+
                     forward_small();
-                    if(Distinguish_Color() != 1) {
+                    // if the robot does not find street and intersection, then continue scanning.
+                    if(Distinguish_Color() != 1 &&
+                       Distinguish_Color() != 4 &&
+                       Distinguish_Color() != 5) {
+                        // finish scan left and right but still does not find the road.
+                        if(left_num >= turn_limit && right_num >= 2 * turn_limit) {
+                            turn_limit += 1;
+                            // if robot does not find road for a long time,
+                            // then back to start state.
+                            if(turn_limit > 5) {
+                                state = ROBOT_INIT;
+                                break;
+                            }
+                            left_num = 0;
+                            right_num = 0;
+                        }
                         state = ADJUST;
                         break;
                     } else {
-                        state = ON_THE_ROAD;
-                        printf("FOUND SUCCESS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                        break;
+                            state = ON_THE_ROAD;
+                            turn_limit = 2;
+                            printf("FOUND SUCCESS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                            break;
                     }
                 }
                 break;
@@ -406,9 +431,19 @@ int drive_along_street(void) {
                 break;
             case FIND_YELLOW:
                 printf("find yellow !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                turn_90_degree_both_wheel(0);
-                forward_small();
-                forward_small();
+                if(step_num == 0) {
+                    turn_90_degree_both_wheel(0);
+                    step_num += 1;
+                    forward_small();
+                    state = FIND_YELLOW;
+                    break;
+                } else {
+                    if(Distinguish_Color() == 4) {
+                        forward_small();
+                        state = FIND_YELLOW;
+                        break;
+                    }
+                }
                 state = ROBOT_INIT;
                 break;
             case ROBOT_STOP:

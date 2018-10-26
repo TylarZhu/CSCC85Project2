@@ -96,9 +96,7 @@ int sx, sy;                 // Size of the map (number of intersections along x 
 double beliefs[400][4];     // Beliefs for each location and motion direction
 int rgb[3];
 double possibility[8];
-int angle_jump = 0;
-int current_angle = 0;
-
+int Black[3],Blue[3],Green[3],Yellow[3],Red[3],White[3];
 int tl = 0, tr = 0, br = 0, bl = 0;
 
 
@@ -112,9 +110,7 @@ int tl = 0, tr = 0, br = 0, bl = 0;
 #define ROBOT_STOP 6
 
 
-int Black[3],Blue[3],Green[3],Yellow[3],Red[3],White[3];
-int Distinguish_Color();
-void Read_sensor();//for calibration RGB
+
 
 int main(int argc, char *argv[]) {
     char mapname[1024];
@@ -270,56 +266,12 @@ int main(int argc, char *argv[]) {
     //TODO: the color between the road and intersection have some problem need to fix!!!!!!!!!!!
 
     drive_along_street();
+
+
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
     BT_close();
     free(map_image);
     exit(0);
-}
-
-int Distinguish_Color(double possibility[6]){
-    /*This function read the sensor and return the most likely color
-     * and calculate the possibility of others
-     */
-    int RGB[3];
-    BT_read_colour_sensor_RGB(PORT_1,RGB);
-    printf("sensor value: R %i B %i G %i \n",RGB[0],RGB[1],RGB[2]);
-    
-    int Black_Error = pow(Black[0]-RGB[0],2) + pow(Black[1]-RGB[1],2) + pow(Black[2]-RGB[2],2);
-    int Blue_Error = pow(Blue[0]-RGB[0],2) + pow(Blue[1]-RGB[1],2) + pow(Blue[2]-RGB[2],2);
-    int Green_Error = pow(Green[0]-RGB[0],2) + pow(Green[1]-RGB[1],2) + pow(Green[2]-RGB[2],2);
-    int Yellow_Error = pow(Yellow[0]-RGB[0],2) + pow(Yellow[1]-RGB[1],2) + pow(Yellow[2]-RGB[2],2);
-    int Red_Error = pow(Red[0]-RGB[0],2) + pow(Red[1]-RGB[1],2) + pow(Red[2]-RGB[2],2);
-    int White_Error = pow(White[0]-RGB[0],2) + pow(White[1]-RGB[1],2) + pow(White[2]-RGB[2],2);
-    int Sum_Of_Square_Error = Black_Error + Blue_Error + Green_Error + Yellow_Error + Red_Error + White_Error;
-    possibility[1] = ((double)Sum_Of_Square_Error - (double)Black_Error)/(double)Sum_Of_Square_Error;
-    possibility[2] = ((double)Sum_Of_Square_Error - (double)Blue_Error)/(double)Sum_Of_Square_Error;
-    possibility[3] = ((double)Sum_Of_Square_Error - (double)Green_Error)/(double)Sum_Of_Square_Error;
-    possibility[4] = ((double)Sum_Of_Square_Error - (double)Yellow_Error)/(double)Sum_Of_Square_Error;
-    possibility[5] = ((double)Sum_Of_Square_Error - (double)Red_Error)/(double)Sum_Of_Square_Error;
-    possibility[6] = ((double)Sum_Of_Square_Error - (double)White_Error)/(double)Sum_Of_Square_Error;
-
-    printf("Black SQUARE ERROR is %i\n",Black_Error);
-    printf("Blue SQUARE ERROR is %i\n",Blue_Error);
-    printf("Green SQUARE ERROR is %i\n",Green_Error);
-    printf("Yellow SQUARE ERROR is %i\n",Yellow_Error);
-    printf("RED SQUARE ERROR is %i\n",Red_Error);
-    printf("White SQUARE ERROR is %i\n",White_Error);
-    printf("prossibility of Black is %2f\n",possibility[1]);
-    printf("prossibility of Blue is %2f\n",possibility[2]);
-    printf("prossibility of Green is %2f\n",possibility[3]);
-    printf("prossibility of Yellow is %2f\n",possibility[4]);
-    printf("prossibility of Red is %2f\n",possibility[5]);
-    printf("prossibility of White is %2f\n",possibility[6]);
-
-    for (int i =1; i < 7 ;i++){
-        if (possibility[i] > 0.98) {
-            possibility[0] = i;
-            return possibility[0];
-        }
-    }
-    possibility[0] = 2;
-    return possibility[0];
-    
 }
 
 /*!
@@ -1262,10 +1214,12 @@ void turn_180_degree_both_wheel(void) {
     for(int i = 0; i <= 1000000000; i ++);
 }
 
+/*!
+ * This function read the sensor and return the most likely color
+ * and calculate the possibility of others
+ * @return index of that color.
+ */
 int Distinguish_Color(void) {
-    /*This function read the sensor and return the most likely color
-     * and calculate the possibility of others
-     */
     double possibility[7];
 
 
@@ -1294,24 +1248,6 @@ int Distinguish_Color(void) {
     possibility[5] = (Sum_Of_Square_Error - sqrt((double) Red_Error)) / Sum_Of_Square_Error;
     possibility[6] = (Sum_Of_Square_Error - sqrt((double) White_Error)) / Sum_Of_Square_Error;
 
-
-
-    /*
-    printf("prossibility of Black is %2f\n", possibility[1]);
-    printf("prossibility of Blue is %2f\n", possibility[2]);
-    printf("prossibility of Green is %2f\n", possibility[3]);
-    printf("prossibility of Yellow is %2f\n", possibility[4]);
-    printf("prossibility of Red is %2f\n", possibility[5]);
-    printf("prossibility of White is %2f\n", possibility[6]);
-    */
-    /*
-    printf("prossibility of Black is %i\n", Black_Error);
-    printf("prossibility of Blue is %i\n", Blue_Error);
-    printf("prossibility of Green is %i\n", Green_Error);
-    printf("prossibility of Yellow is %i\n", Yellow_Error);
-    printf("prossibility of Red is %i\n", Red_Error);
-    printf("prossibility of White is %i\n", White_Error);*/
-
     double max=-1;
     int colour_value=1;
     for (int i = 1; i < 7; i++) {
@@ -1320,14 +1256,6 @@ int Distinguish_Color(void) {
             colour_value = i;
         }
     }
-    //if(Yellow_Error > 5000 && Green_Error > 5000 && colour_value == 3) {
-    //    colour_value = 4;
-
-    //}
-    /*
-    printf("Colour Valus is %i\n", colour_value);
-    printf("Current angle: %i\n", current_angle);
-    printf("Actural angle: %i\n", get_true_angle());*/
     return colour_value;
 
 
@@ -1429,7 +1357,6 @@ void find_red(void) {
     while(Distinguish_Color() == 5) {
         forward_small_1();
     }
-    current_angle += 180;
 }
 
 void adjust(void) {

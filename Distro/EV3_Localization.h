@@ -73,7 +73,6 @@ code that you have to complete in order to implement the localization algorithms
 #define HEXKEY "00:16:53:55:D2:17"
 #endif
 
-
 int parse_map(unsigned char *map_img, int rx, int ry);
 
 int robot_localization(int *robot_x, int *robot_y, int *direction);
@@ -141,8 +140,5 @@ void turn_left_angle(int);
 void turn_45_degree_both_wheel(int);
 
 void rescan(void);
-
-
-//int turn_90_degree_one_wheel(char);
 
 #endif

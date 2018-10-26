@@ -84,7 +84,7 @@ int find_street(void);
 
 int drive_along_street(void);
 
-int scan_intersection(int *tl, int *tr, int *br, int *bl);
+int scan_intersection();
 
 int turn_at_intersection(int turn_direction);
 
@@ -104,8 +104,6 @@ void turn_left_small(void);
 
 void turn_right_small(void);
 
-void forward_small(void);
-
 void Read_sensor(void);
 
 void find_road(void);
@@ -113,6 +111,36 @@ void find_road(void);
 void turn_upright(int);
 
 void turn_backwards(void);
+
+void find_red(void);
+
+void adjust(void);
+
+void command(void);
+
+int double_check(void);
+
+int get_true_angle(void);
+
+void turn_right_angle(int);
+
+void forward_small_1(void);
+
+void forward_small_2(void);
+
+void forward_small_3(void);
+
+void backward_small_1(void);
+
+void backward_small_2(void);
+
+void backward_small_3(void);
+
+void turn_left_angle(int);
+
+void turn_45_degree_both_wheel(int);
+
+void rescan(void);
 
 
 //int turn_90_degree_one_wheel(char);

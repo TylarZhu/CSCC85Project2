@@ -96,6 +96,11 @@ int sx, sy;                 // Size of the map (number of intersections along x 
 double beliefs[400][4];     // Beliefs for each location and motion direction
 int rgb[3];
 double possibility[8];
+int angle_jump = 0;
+int current_angle = 0;
+
+int tl = 0, tr = 0, br = 0, bl = 0;
+
 
 #define FILE_NAME "rgb.dat" //save for RGB initial value
 #define ROBOT_INIT 0
@@ -261,22 +266,19 @@ int main(int argc, char *argv[]) {
 
     // HERE - write code to call robot_localization() and go_to_target() as needed, any additional logic required to get the
     // robot to complete its task should be here.
-    /*for(int i = 0; i <= 3; i ++){
-        drive_along_street();
-        printf("finish %i*************************************************************************************\n", i);
-        for(int i = 0; i <= 1000000000; i ++);
-        turn_90_degree_both_wheel(0);
-        for(int i = 0; i <= 1000000000; i ++);
-        BT_timed_motor_port_start(MOTOR_B | MOTOR_A, 10, 100, 1000, 100);
-        for(int i = 0; i <= 1000000000; i ++);
-    }*/
 
+    //TODO: the color between the road and intersection have some problem need to fix!!!!!!!!!!!
+
+    //for(int i = 0; i <= 2; i ++) {
     drive_along_street();
+    //}
+    //turn_180_degree_both_wheel();
+    //adjust();
+    //turn_backwards();
+    //BT_all_stop(0);
+    //turn_right_angle(90);
+    //scan_intersection(0, 0, 0, 0);
 
-    //drive_along_street();
-    //Distinguish_Color();
-    //turn_left_small();
-    //drive_along_street();
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
     BT_close();
     free(map_image);
@@ -290,6 +292,26 @@ int main(int argc, char *argv[]) {
  * @return int, 1 success 0 fail
  */
 int find_street(void) {
+    bool flag = true;
+    printf("find street !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    while(flag) {
+        if (Distinguish_Color() == 1 || Distinguish_Color() == 4 || Distinguish_Color() == 5) {
+            flag = false;
+            drive_along_street();
+        } else {
+            while(Distinguish_Color() != 1 && Distinguish_Color() != 4 && Distinguish_Color() != 5) {
+                BT_motor_port_start(MOTOR_A | MOTOR_B, 5);
+            }
+            if(Distinguish_Color() == 1) {
+                forward_small_2();
+                while(Distinguish_Color() != 1) {
+                    turn_backwards();
+                    turn_left_small();
+                    forward_small_2();
+                }
+            }
+        }
+    }
     return 1;
 }
 
@@ -304,153 +326,43 @@ int find_street(void) {
  * @return int, 1 fail 0 success
  */
 int drive_along_street(void) {
-    int state = ROBOT_INIT, step_num = 0, step_yellow = 0, left_num = 0, right_num = 0, turn_limit = 2;
-    bool stop = false;
-    while(!stop) {
-        switch (state) {
-            case ROBOT_INIT:
-                step_num = 0;
-                printf("robot init !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                // go across the map until find the road, hit a intersection or wall
-                if(Distinguish_Color() != 1 && Distinguish_Color() != 4 && Distinguish_Color() != 5) {
-                    BT_drive(MOTOR_A, MOTOR_B, 10);
-                    state = ROBOT_INIT;
-                // if the robot hit the wall, turn 180
-                } else if (Distinguish_Color() == 5) {
-                    BT_all_stop(1);
-                    state = FIND_RED;
-                // if the robot find the intersection, then go to find yellow state.
-                } else if (Distinguish_Color() == 4) {
-                    BT_all_stop(1);
-                    state = FIND_YELLOW;
-                // if the robot finds street and it is the first time,
-                // then adjust the robot parallel to the street.
-                } else {
-                    BT_all_stop(1);
-                    state = FIND_ROAD;
+    printf("ON THE ROAD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    while (tl != 3 || tr != 6 || br != 2 || bl != 6) {
+        // if the robot is on the road, then follow it.
+        while (Distinguish_Color() == 1) {
+            BT_motor_port_start(MOTOR_A | MOTOR_B, 10);
+            // if the robot is on the intersection, then go to FIND YELLOW state.
+        }
+        if (Distinguish_Color() == 4) {
+            for (int i = 0; i <= 80000000; i++);
+            BT_all_stop(1);
+            int scan_comp = 1;
+            while (scan_comp == 1) {
+                scan_comp = scan_intersection();
+                if (scan_comp == 1) {
+                    printf("rescan intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                    rescan();
                 }
-                break;
-
-            case ON_THE_ROAD:
-                step_num = 0;
-                printf("ON THE ROAD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                if(Distinguish_Color() == 1) {
-                    BT_motor_port_start(MOTOR_A | MOTOR_B, 10);
-                    state = ON_THE_ROAD;
-                    //break;
-                } else if(Distinguish_Color() == 4 && step_yellow < 3) {
-                    BT_all_stop(1);
-                    state = FIND_YELLOW;
-                    step_yellow += 1;
-                } else if(Distinguish_Color() == 5) {
-                    BT_all_stop(1);
-                    state = FIND_RED;
-                } else if(step_yellow >= 3) {
-                    BT_all_stop(1);
-                    state = ROBOT_STOP;
-                } else {
-                    BT_all_stop(1);
-                    left_num = 0;
-                    right_num = 0;
-                    state = ADJUST;
-                }
-                break;
-
-            case FIND_ROAD:
-                printf("find road !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                forward_small();
-                if (Distinguish_Color() == 1 || Distinguish_Color() == 4 || Distinguish_Color() == 5) {
-                    state = ON_THE_ROAD;
-                    break;
-                } else {
-                    turn_backwards();
-                    turn_left_small();
-                    forward_small();
-                    state = FIND_ROAD;
-                }
-
-                break;
-
-            case ADJUST:
-                printf("ADJUST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                if(Distinguish_Color() != 1) {
-                    turn_backwards();
-                    state = ADJUST;
-                    break;
-                }
-                if(Distinguish_Color() == 1) {
-                    if(left_num < turn_limit) {
-                        printf("TURN LEFT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                        turn_left_small();
-                        left_num += 1;
-                    } else if(right_num < 2 * turn_limit){
-                        printf("TURN RIGHT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                        turn_right_small();
-                        right_num += 1;
-                    }
-
-                    forward_small();
-                    // if the robot does not find street and intersection, then continue scanning.
-                    if(Distinguish_Color() != 1 &&
-                       Distinguish_Color() != 4 &&
-                       Distinguish_Color() != 5) {
-                        // finish scan left and right but still does not find the road.
-                        if(left_num >= turn_limit && right_num >= 2 * turn_limit) {
-                            turn_limit += 1;
-                            // if robot does not find road for a long time,
-                            // then back to start state.
-                            if(turn_limit > 5) {
-                                state = ROBOT_INIT;
-                                break;
-                            }
-                            left_num = 0;
-                            right_num = 0;
-                        }
-                        state = ADJUST;
-                        break;
-                    } else {
-                            state = ON_THE_ROAD;
-                            turn_limit = 2;
-                            printf("FOUND SUCCESS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                            break;
-                    }
-                }
-                break;
-
-            case FIND_RED:
-                printf("find RED !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                if(step_num < 2) {
-                    turn_90_degree_both_wheel(0);
-                    step_num += 1;
-                    state = FIND_RED;
-                    break;
-                }
-                forward_small();
-                forward_small();
-                state = ROBOT_INIT;
-                break;
-            case FIND_YELLOW:
-                printf("find yellow !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                if(step_num == 0) {
-                    turn_90_degree_both_wheel(0);
-                    step_num += 1;
-                    forward_small();
-                    state = FIND_YELLOW;
-                    break;
-                } else {
-                    if(Distinguish_Color() == 4) {
-                        forward_small();
-                        state = FIND_YELLOW;
-                        break;
-                    }
-                }
-                state = ROBOT_INIT;
-                break;
-            case ROBOT_STOP:
-                stop = true;
-                break;
+            }
+            if(tl != 3 || tr != 6 || br != 2 || bl != 6) {
+                printf("turn intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                turn_at_intersection(0);
+                printf("forward intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                forward_small_1();
+            }
+            // if the robot hit the wall, then go to FIND RED state.
+        } else if (Distinguish_Color() == 5) {
+            BT_all_stop(1);
+            find_red();
+            // if the robot is not on the road, the road must be near the robot,
+            // then go to ADJUST state.
+        } else {
+            BT_all_stop(1);
+            adjust();
         }
     }
+    BT_all_stop(0);
+    printf("arrive intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     return 0;
 }
 
@@ -480,35 +392,60 @@ int drive_along_street(void) {
  *
  * @return int 1 fail 0 success
  */
-int scan_intersection(int *tl, int *tr, int *br, int *bl) {
-    /************************************************************************************************************************
-     *   TO DO  -   Complete this function
-     ***********************************************************************************************************************/
-
-
-
-    // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
-    *(tl) = -1;
-    *(tr) = -1;
-    *(br) = -1;
-    *(bl) = -1;
-
-    return (0);
+int scan_intersection() {
+    //turn_left_angle(45);
+    turn_45_degree_both_wheel(1);
+    forward_small_1();
+    tl = Distinguish_Color();
+    backward_small_1();
+    backward_small_1();
+    br = Distinguish_Color();
+    forward_small_1();
+    turn_90_degree_both_wheel(0);
+    //turn_right_small();
+    forward_small_1();
+    //forward_small_3();
+    tr = Distinguish_Color();
+    backward_small_1();
+    backward_small_1();
+    bl = Distinguish_Color();
+    forward_small_1();
+    printf("tl = %i\n", tl);
+    printf("tr = %i\n", tr);
+    printf("br = %i\n", br);
+    printf("bl = %i\n", bl);
+    //forward_small_2();
+    //for(int i = 0; i <= 100000000; i ++);
+    turn_45_degree_both_wheel(1);
+    printf("scan intersection complete!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    if(tl == 1 || tr == 1 || br == 1 || bl == 1) {
+        printf("scan intersection fail*************************************************!\n");
+        return 1;
+    }
+    return 0;
 
 }
 
+/*!
+ * This function is used to have the robot turn either left or right at an intersection
+ * (obviously your bot can not justdrive forward!).
+ * You're free to implement this in any way you like, but it should reliably leave your bot facing the correct direction
+ * and on a street it can follow.
+ * @param turn_direction 0 right, 1 left
+ * @return indicate success or failure, or to inform your code of the state of the bot
+ */
 int turn_at_intersection(int turn_direction) {
-    /*
-     * This function is used to have the robot turn either left or right at an intersection (obviously your bot can not just
-     * drive forward!).
-     *
-     * If turn_direction=0, turn right, else if turn_direction=1, turn left.
-     *
-     * You're free to implement this in any way you like, but it should reliably leave your bot facing the correct direction
-     * and on a street it can follow.
-     *
-     * You can use the return value to indicate success or failure, or to inform your code of the state of the bot
-     */
+    if(turn_direction == 0) {
+        turn_90_degree_both_wheel(0);
+    } else {
+        turn_90_degree_both_wheel(1);
+        turn_left_small();
+        //turn_left_small();
+    }
+    // move the robot out of the intersection.
+    while(Distinguish_Color() == 4) {
+        forward_small_2();
+    }
     return (0);
 }
 
@@ -1002,28 +939,39 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
  * turn a side 90 degree
  * @param side 1 left 0 right
  */
-void turn_90_degree_both_wheel(int side) {
+void turn_45_degree_both_wheel(int side) {
     if(side == 1) {
-        BT_timed_motor_port_start(MOTOR_B, 30, 80, 750, 80);
-        BT_timed_motor_port_start(MOTOR_A, -30, 80, 750, 80);
+        BT_timed_motor_port_start(MOTOR_B, 20, 80, 500, 80);
+        BT_timed_motor_port_start(MOTOR_A, -20, 60, 600, 60);
     } else {
-        BT_timed_motor_port_start(MOTOR_A, 30, 80, 750, 80);
-        BT_timed_motor_port_start(MOTOR_B, -30, 80, 750, 80);
+        BT_timed_motor_port_start(MOTOR_A, 21, 60, 600, 60);
+        BT_timed_motor_port_start(MOTOR_B, -20, 80, 500, 80);
     }
     for(int i = 0; i <= 1000000000; i ++);
+}
+
+/*!
+ * turn a side 90 degree
+ * @param side 1 left 0 right
+ */
+void turn_90_degree_both_wheel(int side) {
+    if(side == 1) {//turn left
+        BT_timed_motor_port_start(MOTOR_B, 20, 80, 1000, 80);
+        BT_timed_motor_port_start(MOTOR_A, -20, 80, 1000, 80);
+
+    } else {
+        BT_timed_motor_port_start(MOTOR_A, 21, 60, 1100, 60);
+        BT_timed_motor_port_start(MOTOR_B, -20, 60, 1100, 60);
+    }
+    for(int i = 0; i <= 2000000000; i ++);
 }
 
 /*!
  * turn a side 180 degree
  */
 void turn_180_degree_both_wheel(void) {
-    printf("Good1************************************************\n");
-    /*
-    BT_timed_motor_port_start(MOTOR_A, -15, 1000, 1000, 1000);
-    BT_timed_motor_port_start(MOTOR_B, -15, 1000, 1000, 1000);*/
-    printf("Good2************************************************\n");
-    BT_timed_motor_port_start(MOTOR_B, 10, 1000, 5500, 5000);
-    BT_timed_motor_port_start(MOTOR_A, -10, 1000, 5500, 5000);
+    BT_timed_motor_port_start(MOTOR_B, 20, 60, 2200, 60);
+    BT_timed_motor_port_start(MOTOR_A, -20, 60, 2200, 60);
     for(int i = 0; i <= 1000000000; i ++);
 }
 
@@ -1059,42 +1007,54 @@ int Distinguish_Color(void) {
     possibility[5] = (Sum_Of_Square_Error - sqrt((double) Red_Error)) / Sum_Of_Square_Error;
     possibility[6] = (Sum_Of_Square_Error - sqrt((double) White_Error)) / Sum_Of_Square_Error;
 
+
+
     /*
     printf("prossibility of Black is %2f\n", possibility[1]);
     printf("prossibility of Blue is %2f\n", possibility[2]);
     printf("prossibility of Green is %2f\n", possibility[3]);
     printf("prossibility of Yellow is %2f\n", possibility[4]);
     printf("prossibility of Red is %2f\n", possibility[5]);
-    printf("prossibility of White is %2f\n", possibility[6]);*/
+    printf("prossibility of White is %2f\n", possibility[6]);
+    */
+    /*
+    printf("prossibility of Black is %i\n", Black_Error);
+    printf("prossibility of Blue is %i\n", Blue_Error);
+    printf("prossibility of Green is %i\n", Green_Error);
+    printf("prossibility of Yellow is %i\n", Yellow_Error);
+    printf("prossibility of Red is %i\n", Red_Error);
+    printf("prossibility of White is %i\n", White_Error);*/
 
     double max=-1;
     int colour_value=1;
     for (int i = 1; i < 7; i++) {
-        if (max <= possibility[i]  ) {
+        if (max <= possibility[i] ) {
             max = possibility[i];
             colour_value = i;
         }
     }
+    //if(Yellow_Error > 5000 && Green_Error > 5000 && colour_value == 3) {
+    //    colour_value = 4;
+
+    //}
+    /*
     printf("Colour Valus is %i\n", colour_value);
+    printf("Current angle: %i\n", current_angle);
+    printf("Actural angle: %i\n", get_true_angle());*/
     return colour_value;
 
 
 }
 
 void turn_left_small(void) {
-    BT_timed_motor_port_start(MOTOR_B, 30, 80, 80, 80);
-    BT_timed_motor_port_start(MOTOR_A, -30, 80, 80, 80);
+    BT_timed_motor_port_start(MOTOR_B, 30, 60, 80, 60);
+    BT_timed_motor_port_start(MOTOR_A, -30, 60, 80, 60);
     for(int i = 0; i <= 1000000000; i ++);
 }
 
 void turn_right_small(void) {
-    BT_timed_motor_port_start(MOTOR_A, 30, 80, 80, 80);
-    BT_timed_motor_port_start(MOTOR_B, -30, 80, 80, 80);
-    for(int i = 0; i <= 1000000000; i ++);
-}
-
-void forward_small(void) {
-    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 30, 80, 100, 80);
+    BT_timed_motor_port_start(MOTOR_A, 30, 60, 80, 60);
+    BT_timed_motor_port_start(MOTOR_B, -30, 60, 80, 60);
     for(int i = 0; i <= 1000000000; i ++);
 }
 
@@ -1113,9 +1073,16 @@ void turn_upright(int side) {
 }
 
 void turn_backwards(void) {
-    while(Distinguish_Color() != 1) {
-        BT_motor_port_start(MOTOR_A | MOTOR_B, -8);
+    bool flag = true;
+    while(flag) {
+        BT_motor_port_start(MOTOR_A | MOTOR_B, -5);
+        if(Distinguish_Color() == 1) {
+            printf("delay !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            //for(int i = 0; i <= 500000; i ++);
+            flag = false;
+        }
     }
+    for(int i = 0; i <= 500000000; i ++);
 }
 
 /*!
@@ -1136,10 +1103,180 @@ void Read_sensor(void) {
     rgb[1] = (int)(sum[1]/10);
     rgb[2] = (int)(sum[2]/10);
 
-    printf("A_RGB %i %i %i\n",rgb[0],rgb[1],rgb[2]);
+}
+/*
+void command(void){
+    bool flag = true;
+    while(flag) {
+        printf("robot init !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        // go across the map until find the road, hit a intersection or wall
+        while (Distinguish_Color() != 1 && Distinguish_Color() != 4 && Distinguish_Color() != 5) {
+            BT_drive(MOTOR_A, MOTOR_B, 10);
+        }
+        // if the robot hit the wall, go to FIND RED state.
+        if (Distinguish_Color() == 5) {
+            BT_all_stop(1);
+            find_red();
+            flag = false;
+            // if the robot find the intersection, then go to find FIND YELLOW state.
+        } else if (Distinguish_Color() == 4) {
+            //printf("delay !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            //for(int i = 0; i <= 100000000; i ++);
+            BT_all_stop(1);
+            turn_at_intersection(0);
+            // assume the robot is placed anywhere on the map
+            // go to FIND ROAD state.
+        } else {
+            BT_all_stop(1);
+            drive_along_street();
+        }
+    }
+    printf("command over !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+}
+*/
+void find_red(void) {
+    printf("find RED !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    turn_180_degree_both_wheel();
+    printf("delay ***************************************************************************\n");
+    for(int i = 0; i <= 1000000000; i ++);
+    while(Distinguish_Color() == 5) {
+        forward_small_1();
+    }
+    current_angle += 180;
 }
 
-void find_road(void) {
+void adjust(void) {
+    int left_num = 0, right_num = 0, turn_limit = 1, last_turn = 0;
+    bool flag = true;
+    printf("ADJUST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    while(Distinguish_Color() != 1 && Distinguish_Color() != 4 && flag) {
+        turn_backwards();
+        printf("ADJUST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        if(left_num < turn_limit) {
+            printf("TURN LEFT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            turn_left_small();
+            left_num += 1;
+            last_turn = 1;
+        } else if(right_num < 2 * turn_limit){
+            printf("TURN RIGHT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            turn_right_small();
+            right_num += 1;
+            last_turn = 0;
+        }
+        forward_small_2();
+        // if the robot does not find street and intersection, then continue scanning.
+        if(Distinguish_Color() != 1 &&
+           Distinguish_Color() != 4 &&
+           Distinguish_Color() != 5) {
+            // finish scan left and right but still does not find the road.
+            if (left_num >= turn_limit && right_num >= 2 * turn_limit) {
+                left_num = 0;
+                right_num = 0;
+                turn_limit += 1;
+            }
+        } else {
+            backward_small_2();
+            if(last_turn == 1) {
+                turn_left_small();
+            } else {
+                turn_right_small();
+            }
+            forward_small_2();
+            flag = false;
+        }
+    }
+}
+/*
+int double_check(void) {
+    printf("double check !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    for(int i = 0; i <= 1000000000; i ++);
+    forward_small_3();
+    return Distinguish_Color();
 
+}*/
+
+void forward_small_3(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 15, 80, 80, 80);
+    for(int i = 0; i <= 1000000000; i ++);
 }
 
+void forward_small_2(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 20, 80, 200, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void forward_small_1(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 25, 80, 400, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void backward_small_3(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -15, 80, 80, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void backward_small_2(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -20, 80, 200, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void backward_small_1(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -25, 80, 400, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void rescan(void) {
+    while(Distinguish_Color() == 4) {
+        forward_small_2();
+    }
+    turn_right_small();
+    while(Distinguish_Color() != 4) {
+        BT_motor_port_start(MOTOR_A | MOTOR_B, -10);
+    }
+}
+/*
+int get_true_angle(void) {
+    if (0 < angle && angle < 63) {
+        angle_jump = 0;
+    }
+
+    for (int i = 0; i < 15; i++) {
+        if ((92 + 256 * i) < angle && angle < (292 + 256 * i)) {
+            angle_jump = i + 1;
+        }
+
+        if ((-420 - 256 * i) < angle && angle < (-220 - 256 * i)) {
+            angle_jump = -i - 1;
+        }
+    }
+    printf("angle_jump=%i\n", angle_jump);
+
+    if (-128 <= angle && angle <= -1) {
+        real_angle = angle + 256 * angle_jump;
+    } else {
+        real_angle = angle;
+    }
+    return real_angle;
+}
+
+void turn_left_angle(int angle) {
+    //left angle
+    int start_angle = get_true_angle();
+    BT_turn(MOTOR_A, -20, MOTOR_B, 20);
+    for(int i = 0; i <= 1000000000; i ++);
+    //while (fabs((float) (get_true_angle() - start_angle)) < angle - 6);
+    printf("stop....\n");
+    BT_all_stop(1);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void turn_right_angle(int angle) {
+    //left angle
+    int start_angle = get_true_angle();
+    BT_turn(MOTOR_A, 22, MOTOR_B, -19);
+    //while (fabs((float) (get_true_angle() - start_angle)) < angle - 6);
+    printf("stop....\n");
+    BT_all_stop(1);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+*/

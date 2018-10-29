@@ -144,5 +144,4 @@ void rescan(void);
 int double_check(void);
 
 void update_beliefs(int last_act, int intersection_reading[4]);
-
 #endif

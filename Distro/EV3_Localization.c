@@ -90,6 +90,7 @@
 #include <stdbool.h>
 
 int redflag = 0;
+
 int map[400][4];            
                             // This holds the representation of the map, up to 20x20
                             // intersections, raster ordered, 4 building colours per
@@ -108,7 +109,6 @@ int turn = -1;
 int dest_x, dest_y;
 
 
-
 #define FILE_NAME "rgb.dat" //save for RGB initial value
 #define ROBOT_INIT 0
 #define ON_THE_ROAD 1
@@ -117,6 +117,8 @@ int dest_x, dest_y;
 #define FIND_YELLOW 4
 #define FIND_RED 5
 #define ROBOT_STOP 6
+void update_beliefs(int last_act, int intersection_reading[4]);
+
 
 
 
@@ -275,7 +277,7 @@ int main(int argc, char *argv[]) {
     // robot to complete its task should be here.
 
     //TODO: the color between the road and intersection have some problem need to fix!!!!!!!!!!!
-
+    
     drive_along_street();
 
 
@@ -353,8 +355,11 @@ int drive_along_street(void) {
             printf("turn intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
             if(turn_choice == 1) {
                 turn_choice = 0;
-            } else {
+                //turn_at_intersection(0);
+
+            }else if (turn_choice == 0){
                 turn_choice = 1;
+                //turn_at_intersection(1);
             }
             int sc[4];
             sc[0] = tl;
@@ -366,7 +371,6 @@ int drive_along_street(void) {
             robot_localization();
             turn = go_to_target(rbt_x,rbt_y,rbt_dir,dest_x, dest_y);
             if (turn == 1){
-                turn_choice = 0;
                 turn_at_intersection(0);
 
             }else if (turn == 2){
@@ -374,7 +378,6 @@ int drive_along_street(void) {
                 turn_at_intersection(0);
 
             }else if (turn == 3){
-                turn_choice = 1;
                 turn_at_intersection(1);
             }
 
@@ -496,208 +499,208 @@ void update_beliefs(int last_act, int intersection_reading[4]){
             last_beliefs[i + (j * sx)][3] = beliefs[i + (j * sx)][3];
         }
     }
-    //acting 
+    //acting
     if (redflag){// last point read is red
         printf("REDFLAG is on!!!!!!!!!!!!!!!!!!!!!!!!!!");
         for (int j = 0; j < sy; j++) {
             for (int i = 0; i < sx; i++) {
 
                 //acting
-                if (last_act == 0){ // going up
+                if (last_act == 0) { // going up
                     if (i + 1 < sx) {
                         beliefs[i + (j * sx)][3] = 0;
                     } else {
                         beliefs[i + (j * sx)][3] = last_beliefs[i + (j * sx)][1] * 0.8;
-                        if (j - 1 >= 0){
+                        if (j - 1 >= 0) {
                             beliefs[i + (j * sx)][3] += last_beliefs[i + ((j - 1) * sx)][1] * 0.05;
                         }
-                        if (j + 1 < sy){
+                        if (j + 1 < sy) {
                             beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][1] * 0.05;
                         }
                     }
                     if (j - 1 >= 0) {
                         beliefs[i + (j * sx)][2] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][2] = last_beliefs[i + (j * sx)][0] * 0.8;
-                        if (i - 1 >= 0){
+                        if (i - 1 >= 0) {
                             beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][0] * 0.05;
                         }
-                        if (i + 1 < sx){
+                        if (i + 1 < sx) {
                             beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + (j * sx)][0] * 0.05;
                         }
                     }
                     if (i - 1 >= 0) {
                         beliefs[i + (j * sx)][1] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][1] = last_beliefs[i + (j * sx)][3] * 0.8;
-                        if (j - 1 >= 0){
+                        if (j - 1 >= 0) {
                             beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][3] * 0.05;
                         }
-                        if (j + 1 < sy){
+                        if (j + 1 < sy) {
                             beliefs[i + (j * sx)][1] += last_beliefs[i + ((j + 1) * sx)][3] * 0.05;
                         }
                     }
                     if (j + 1 < sy) {
                         beliefs[i + (j * sx)][0] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][0] = last_beliefs[i + (j * sx)][2] * 0.8;
-                        if (i - 1 >= 0){
+                        if (i - 1 >= 0) {
                             beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + (j * sx)][2] * 0.05;
                         }
-                        if (i + 1 < sx){
+                        if (i + 1 < sx) {
                             beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][2] * 0.05;
                         }
                     }
                 }
-                if (last_act == 1){// turn right
+                if (last_act == 1) {// turn right
                     if (i + 1 < sx) {
                         beliefs[i + (j * sx)][3] = 0;
                     } else {
                         beliefs[i + (j * sx)][3] = last_beliefs[i + (j * sx)][0] * 0.8;
-                        if (j - 1 >= 0){
+                        if (j - 1 >= 0) {
                             beliefs[i + (j * sx)][3] += last_beliefs[i + ((j - 1) * sx)][0] * 0.05;
                         }
-                        if (j + 1 < sy){
+                        if (j + 1 < sy) {
                             beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][0] * 0.05;
                         }
                     }
                     if (j - 1 >= 0) {
                         beliefs[i + (j * sx)][2] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][2] = last_beliefs[i + (j * sx)][3] * 0.8;
-                        if (i - 1 >= 0){
+                        if (i - 1 >= 0) {
                             beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][3] * 0.05;
                         }
-                        if (i + 1 < sx){
+                        if (i + 1 < sx) {
                             beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + (j * sx)][3] * 0.05;
                         }
                     }
                     if (i - 1 >= 0) {
                         beliefs[i + (j * sx)][1] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][1] = last_beliefs[i + (j * sx)][2] * 0.8;
-                        if (j - 1 >= 0){
+                        if (j - 1 >= 0) {
                             beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][2] * 0.05;
                         }
-                        if (j + 1 < sy){
+                        if (j + 1 < sy) {
                             beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][2] * 0.05;
                         }
                     }
                     if (j + 1 < sy) {
                         beliefs[i + (j * sx)][0] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][0] = last_beliefs[i + (j * sx)][1] * 0.8;
-                        if (i - 1 >= 0){
+                        if (i - 1 >= 0) {
                             beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + (j * sx)][1] * 0.05;
                         }
-                        if (i + 1 < sx){
+                        if (i + 1 < sx) {
                             beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][1] * 0.05;
                         }
                     }
                 }
-                if (last_act == 2){//turn back
+                if (last_act == 2) {//turn back
                     if (i + 1 < sx) {
                         beliefs[i + (j * sx)][3] = 0;
                     } else {
                         beliefs[i + (j * sx)][3] = last_beliefs[i + (j * sx)][3] * 0.8;
-                        if (j - 1 >= 0){
+                        if (j - 1 >= 0) {
                             beliefs[i + (j * sx)][3] += last_beliefs[i + ((j - 1) * sx)][3] * 0.05;
                         }
-                        if (j + 1 < sy){
+                        if (j + 1 < sy) {
                             beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][3] * 0.05;
                         }
                     }
                     if (j - 1 >= 0) {
                         beliefs[i + (j * sx)][2] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][2] = last_beliefs[i + (j * sx)][2] * 0.8;
-                        if (i - 1 >= 0){
+                        if (i - 1 >= 0) {
                             beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][2] * 0.05;
                         }
-                        if (i + 1 < sx){
+                        if (i + 1 < sx) {
                             beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + (j * sx)][2] * 0.05;
                         }
                     }
                     if (i - 1 >= 0) {
                         beliefs[i + (j * sx)][1] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][1] = last_beliefs[i + (j * sx)][1] * 0.8;
-                        if (j - 1 >= 0){
+                        if (j - 1 >= 0) {
                             beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][1] * 0.05;
                         }
-                        if (j + 1 < sy){
+                        if (j + 1 < sy) {
                             beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][1] * 0.05;
                         }
                     }
                     if (j + 1 < sy) {
                         beliefs[i + (j * sx)][0] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][0] = last_beliefs[i + (j * sx)][0] * 0.8;
-                        if (i - 1 >= 0){
+                        if (i - 1 >= 0) {
                             beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + (j * sx)][0] * 0.05;
                         }
-                        if (i + 1 < sx){
+                        if (i + 1 < sx) {
                             beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][0] * 0.05;
                         }
                     }
-                } 
-                if (last_act == 3){//turn left
+                }
+                if (last_act == 3) {//turn left
                     if (i + 1 < sx) {
                         beliefs[i + (j * sx)][3] = 0;
                     } else {
                         beliefs[i + (j * sx)][3] = last_beliefs[i + (j * sx)][2] * 0.8;
-                        if (j - 1 >= 0){
+                        if (j - 1 >= 0) {
                             beliefs[i + (j * sx)][3] += last_beliefs[i + ((j - 1) * sx)][2] * 0.05;
                         }
-                        if (j + 1 < sy){
+                        if (j + 1 < sy) {
                             beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][2] * 0.05;
                         }
                     }
                     if (j - 1 >= 0) {
                         beliefs[i + (j * sx)][2] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][2] = last_beliefs[i + (j * sx)][1] * 0.8;
-                        if (i - 1 >= 0){
+                        if (i - 1 >= 0) {
                             beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][1] * 0.05;
                         }
-                        if (i + 1 < sx){
+                        if (i + 1 < sx) {
                             beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + (j * sx)][1] * 0.05;
                         }
                     }
                     if (i - 1 >= 0) {
                         beliefs[i + (j * sx)][1] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][1] = last_beliefs[i + (j * sx)][0] * 0.8;
-                        if (j - 1 >= 0){
+                        if (j - 1 >= 0) {
                             beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][0] * 0.05;
                         }
-                        if (j + 1 < sy){
+                        if (j + 1 < sy) {
                             beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][0] * 0.05;
                         }
                     }
                     if (j + 1 < sy) {
                         beliefs[i + (j * sx)][0] = 0;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][0] = last_beliefs[i + (j * sx)][3] * 0.8;
-                        if (i - 1 >= 0){
+                        if (i - 1 >= 0) {
                             beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + (j * sx)][3] * 0.05;
                         }
-                        if (i + 1 < sx){
+                        if (i + 1 < sx) {
                             beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][3] * 0.05;
                         }
                     }
                 }
-                
+
                 //stay at the point
                 beliefs[i + (j * sx)][0] += last_beliefs[i + (j * sx)][0] * 0.1;
                 beliefs[i + (j * sx)][1] += last_beliefs[i + (j * sx)][1] * 0.1;
                 beliefs[i + (j * sx)][2] += last_beliefs[i + (j * sx)][2] * 0.1;
                 beliefs[i + (j * sx)][3] += last_beliefs[i + (j * sx)][3] * 0.1;
 
-                C = C + beliefs[i + (j * sx)][0] 
-                  + beliefs[i + (j * sx)][1]
-                  + beliefs[i + (j * sx)][2]
-                  + beliefs[i + (j * sx)][3];
+                C = C + beliefs[i + (j * sx)][0]
+                    + beliefs[i + (j * sx)][1]
+                    + beliefs[i + (j * sx)][2]
+                    + beliefs[i + (j * sx)][3];
 
             }
         }
@@ -706,7 +709,7 @@ void update_beliefs(int last_act, int intersection_reading[4]){
             for (int i = 0; i < sx; i++) {
 
                 //acting
-                if (last_act == 0){ // going up
+                if (last_act == 0) { // going up
                     //do great job
                     if (i + 1 < sx) {
                         beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][3] * 0.7;
@@ -715,17 +718,17 @@ void update_beliefs(int last_act, int intersection_reading[4]){
                     }
                     if (j - 1 >= 0) {
                         beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][2] * 0.7;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][2] = 0;
                     }
                     if (i - 1 >= 0) {
                         beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][1] * 0.7;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][1] = 0;
                     }
                     if (j + 1 < sy) {
                         beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][0] * 0.7;
-                    }else {
+                    } else {
                         beliefs[i + (j * sx)][0] = 0;
                     }
 
@@ -757,28 +760,26 @@ void update_beliefs(int last_act, int intersection_reading[4]){
                         beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + ((j + 1) * sx)][0] * 0.05;
                     }
                 }
-                if (last_act == 1){// turn right
+                if (last_act == 1) {// turn right
                     //do great job
                     if (i + 1 < sx) {
-                        beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][2] * 0.8;
-                    }else {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][2] * 0.7;
+                    } else {
                         beliefs[i + (j * sx)][3] = 0;
                     }
                     if (j - 1 >= 0) {
-                        beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][1] * 0.8;
-                    }
-                    else {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][1] * 0.7;
+                    } else {
                         beliefs[i + (j * sx)][2] = 0;
                     }
                     if (i - 1 >= 0) {
-                        beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][0] * 0.8;
-                    }
-                    else {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][0] * 0.7;
+                    } else {
                         beliefs[i + (j * sx)][1] = 0;
                     }
                     if (j + 1 < sy) {
-                        beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][3] * 0.8;
-                    }else {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][3] * 0.7;
+                    } else {
                         beliefs[i + (j * sx)][0] = 0;
                     }
 
@@ -810,26 +811,26 @@ void update_beliefs(int last_act, int intersection_reading[4]){
                         beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + ((j + 1) * sx)][3] * 0.05;
                     }
                 }
-                if (last_act == 2){//turn back
+                if (last_act == 2) {//turn back
                     //do great job
                     if (i + 1 < sx) {
                         beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][1] * 0.7;
-                    }else{
+                    } else {
                         beliefs[i + (j * sx)][3] = 0;
                     }
                     if (j - 1 >= 0) {
                         beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][0] * 0.7;
-                    }else{
+                    } else {
                         beliefs[i + (j * sx)][2] = 0;
                     }
                     if (i - 1 >= 0) {
                         beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][3] * 0.7;
-                    }else{
+                    } else {
                         beliefs[i + (j * sx)][1] = 0;
                     }
                     if (j + 1 < sy) {
                         beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][2] * 0.7;
-                    }else{
+                    } else {
                         beliefs[i + (j * sx)][0] = 0;
                     }
 
@@ -860,27 +861,27 @@ void update_beliefs(int last_act, int intersection_reading[4]){
                     if (j + 1 < sy && i - 1 < sx) {
                         beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + ((j + 1) * sx)][2] * 0.05;
                     }
-                } 
-                if (last_act == 3){//turn left
+                }
+                if (last_act == 3) {//turn left
                     //do great job
                     if (i + 1 < sx) {
                         beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][0] * 0.7;
-                    }else{
+                    } else {
                         beliefs[i + (j * sx)][3] = 0;
                     }
                     if (j - 1 >= 0) {
                         beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][3] * 0.7;
-                    }else{
+                    } else {
                         beliefs[i + (j * sx)][2] = 0;
                     }
                     if (i - 1 >= 0) {
                         beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][2] * 0.7;
-                    }else{
+                    } else {
                         beliefs[i + (j * sx)][1] = 0;
                     }
                     if (j + 1 < sy) {
                         beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][1] * 0.7;
-                    }else{
+                    } else {
                         beliefs[i + (j * sx)][0] = 0;
                     }
                     //from the left one
@@ -910,20 +911,20 @@ void update_beliefs(int last_act, int intersection_reading[4]){
                         beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + ((j + 1) * sx)][1] * 0.05;
                     }
                 }
-                
+
                 //stay at the point
                 beliefs[i + (j * sx)][0] += last_beliefs[i + (j * sx)][0] * 0.2;
                 beliefs[i + (j * sx)][1] += last_beliefs[i + (j * sx)][1] * 0.2;
                 beliefs[i + (j * sx)][2] += last_beliefs[i + (j * sx)][2] * 0.2;
                 beliefs[i + (j * sx)][3] += last_beliefs[i + (j * sx)][3] * 0.2;
 
-                C = C + beliefs[i + (j * sx)][0] 
-                  + beliefs[i + (j * sx)][1]
-                  + beliefs[i + (j * sx)][2]
-                  + beliefs[i + (j * sx)][3];
-
+                C = C + beliefs[i + (j * sx)][0]
+                    + beliefs[i + (j * sx)][1]
+                    + beliefs[i + (j * sx)][2]
+                    + beliefs[i + (j * sx)][3];
             }
         }
+
         printf("After acting\n");
         for (int j = 0; j < sy; j++) { //normolize and print
             for (int i = 0; i < sx; i++) {

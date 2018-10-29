@@ -73,16 +73,9 @@ code that you have to complete in order to implement the localization algorithms
 #define HEXKEY "00:16:53:55:D2:17"
 #endif
 
-int Black[] = {0,0,0};
-int Blue[] = {0,0,255};
-int Green[] = {0,255,0};
-int Yellow[] = {255,255,0};
-int Red[] = {255,0,0};
-int White[] = {255,255,255};
-
 int parse_map(unsigned char *map_img, int rx, int ry);
 
-int robot_localization(int *robot_x, int *robot_y, int *direction);
+int robot_localization();
 
 int go_to_target(int robot_x, int robot_y, int direction, int target_x, int target_y);
 
@@ -90,7 +83,7 @@ int find_street(void);
 
 int drive_along_street(void);
 
-int scan_intersection(int *tl, int *tr, int *br, int *bl);
+int scan_intersection();
 
 int turn_at_intersection(int turn_direction);
 
@@ -98,6 +91,57 @@ void calibrate_sensor(void);
 
 unsigned char *readPPMimage(const char *filename, int *rx, int *ry);
 
-int Distinguish_Color(double possibility[6]);
+int color_recognize(void);
+
+void turn_90_degree_both_wheel(int);
+
+void turn_180_degree_both_wheel(void);
+
+int Distinguish_Color();
+
+void turn_left_small(void);
+
+void turn_right_small(void);
+
+void Read_sensor(void);
+
+void find_road(void);
+
+void turn_upright(int);
+
+void turn_backwards(void);
+
+void find_red(void);
+
+void adjust(void);
+
+void command(void);
+
+int double_check(void);
+
+int get_true_angle(void);
+
+void turn_right_angle(int);
+
+void forward_small_1(void);
+
+void forward_small_2(void);
+
+void forward_small_3(void);
+
+void backward_small_1(void);
+
+void backward_small_2(void);
+
+void backward_small_3(void);
+
+void turn_left_angle(int);
+
+void turn_45_degree_both_wheel(int);
+
+void rescan(void);
+
+int double_check(void);
+
 
 #endif

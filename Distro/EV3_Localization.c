@@ -87,17 +87,77 @@
 */
 
 #include "EV3_Localization.h"
+#include <stdbool.h>
 
-int map[400][4];            // This holds the representation of the map, up to 20x20
+int redflag = 0;
+int map[400][4];            
+                            // This holds the representation of the map, up to 20x20
                             // intersections, raster ordered, 4 building colours per
                             // intersection.
 int sx, sy;                 // Size of the map (number of intersections along x and y)
+int rbt_x, rbt_y, rbt_dir = -1;
 double beliefs[400][4];     // Beliefs for each location and motion direction
+int rgb[3];
+double possibility[8];
+int Black[3],Blue[3],Green[3],Yellow[3],Red[3],White[3];
+int tl = 0, tr = 0, br = 0, bl = 0;
+int turn_choice = -1;
+int turn = -1;
+
+int dest_x, dest_y;
+
+
+#define FILE_NAME "rgb.dat" //save for RGB initial value
+#define ROBOT_INIT 0
+#define ON_THE_ROAD 1
+#define FIND_ROAD 2
+#define ADJUST 3
+#define FIND_YELLOW 4
+#define FIND_RED 5
+#define ROBOT_STOP 6
+void update_beliefs(int last_act, int intersection_reading[4]);
+
+
+
+
 
 int main(int argc, char *argv[]) {
     char mapname[1024];
-    int dest_x, dest_y, rx, ry;
+    int rx, ry;
     unsigned char *map_image;
+
+
+    //read the RGB initail value from rgb.dat
+    FILE *fp;
+    fp = fopen(FILE_NAME, "rb");
+    if (fp == NULL) {
+        printf("cann't open %s\n", FILE_NAME);
+        exit(EXIT_FAILURE);
+    }
+    int temp;
+    for (int i = 0; i < 3; i++) {
+        fscanf(fp, "%i\n", &temp);
+        Black[i] = temp;
+        fscanf(fp, "%i\n", &temp);
+        Blue[i] = temp;
+        fscanf(fp, "%i\n", &temp);
+        Green[i] = temp;
+        fscanf(fp, "%i\n", &temp);
+        Yellow[i] = temp;
+        fscanf(fp, "%i\n", &temp);
+        Red[i] = temp;
+        fscanf(fp, "%i\n", &temp);
+        White[i] = temp;
+    }
+    fclose(fp);
+
+    printf("Black  is %i %i %i\n", Black[0], Black[1], Black[2]);
+    printf("Blue   is %i %i %i\n", Blue[0], Blue[1], Blue[2]);
+    printf("Green  is %i %i %i\n", Green[0], Green[1], Green[2]);
+    printf("Yellow is %i %i %i\n", Yellow[0], Yellow[1], Yellow[2]);
+    printf("RED    is %i %i %i\n", Red[0], Red[1], Red[2]);
+    printf("White  is %i %i %i\n", White[0], White[1], White[2]);
+
 
     memset(&map[0][0], 0, 400 * 4 * sizeof(int));
     sx = 0;
@@ -110,14 +170,10 @@ int main(int argc, char *argv[]) {
                 "    dest_x, dest_y - target location for the bot within the map, -1 -1 calls calibration routine\n");
         exit(1);
     }
+
     strcpy(&mapname[0], argv[1]);
     dest_x = atoi(argv[2]);
     dest_y = atoi(argv[3]);
-
-    if (dest_x == -1 && dest_y == -1) {
-        calibrate_sensor();
-        exit(1);
-    }
 
     /******************************************************************************************************************
     * OPTIONAL TO DO: If you added code for sensor calibration, add just below this comment block any code needed to
@@ -139,6 +195,27 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    /******************************************************************************************************************
+    * Bluetooth open, then calibrate sensor.
+    * ****************************************************************************************************************/
+
+    // Open a socket to the EV3 for remote controlling the bot.
+    if (BT_open(HEXKEY) != 0) {
+        fprintf(stderr, "Unable to open comm socket to the EV3, make sure the EV3 kit is powered on, and that the\n");
+        fprintf(stderr, " hex key for the EV3 matches the one in EV3_Localization.h\n");
+        free(map_image);
+        exit(1);
+    }
+
+    fprintf(stderr, "All set, ready to go!\n");
+
+    if (dest_x == -1 && dest_y == -1) {
+        calibrate_sensor();
+        BT_close();
+        free(map_image);
+        exit(1);
+    }
+
     if (dest_x < 0 || dest_x >= sx || dest_y < 0 || dest_y >= sy) {
         fprintf(stderr, "Destination location is outside of the map\n");
         free(map_image);
@@ -154,15 +231,7 @@ int main(int argc, char *argv[]) {
             beliefs[i + (j * sx)][3] = 1.0 / (double) (sx * sy * 4);
         }
     }
-    // Open a socket to the EV3 for remote controlling the bot.
-    if (BT_open(HEXKEY) != 0) {
-        fprintf(stderr, "Unable to open comm socket to the EV3, make sure the EV3 kit is powered on, and that the\n");
-        fprintf(stderr, " hex key for the EV3 matches the one in EV3_Localization.h\n");
-        free(map_image);
-        exit(1);
-    }
 
-    fprintf(stderr, "All set, ready to go!\n");
 
     /*******************************************************************************************************************************
     *
@@ -201,12 +270,11 @@ int main(int argc, char *argv[]) {
     *******************************************************************************************************************************/
 
     // HERE - write code to call robot_localization() and go_to_target() as needed, any additional logic required to get the
-    //        robot to complete its task should be here.
+    // robot to complete its task should be here.
 
-    //find_street();
-    double possibility[6];
-
-    printf("belief the color is %i\n",Distinguish_Color(possibility));
+    //TODO: the color between the road and intersection have some problem need to fix!!!!!!!!!!!
+    
+    drive_along_street();
 
 
     // Cleanup and exit - DO NOT WRITE ANY CODE BELOW THIS LINE
@@ -215,61 +283,34 @@ int main(int argc, char *argv[]) {
     exit(0);
 }
 
-int Distinguish_Color(double possibility[6]){
-    /*This function read the sensor and return the most likely color
-     * and calculate the possibility of others
-     */
-    int RGB[3];
-    BT_read_colour_sensor_RGB(PORT_1,RGB);
-    printf("sensor value: R %i B %i G %i \n",RGB[0],RGB[1],RGB[2]);
-    
-    int Black_Error = pow(Black[0]-RGB[0],2) + pow(Black[1]-RGB[1],2) + pow(Black[2]-RGB[2],2);
-    int Blue_Error = pow(Blue[0]-RGB[0],2) + pow(Blue[1]-RGB[1],2) + pow(Blue[2]-RGB[2],2);
-    int Green_Error = pow(Green[0]-RGB[0],2) + pow(Green[1]-RGB[1],2) + pow(Green[2]-RGB[2],2);
-    int Yellow_Error = pow(Yellow[0]-RGB[0],2) + pow(Yellow[1]-RGB[1],2) + pow(Yellow[2]-RGB[2],2);
-    int Red_Error = pow(Red[0]-RGB[0],2) + pow(Red[1]-RGB[1],2) + pow(Red[2]-RGB[2],2);
-    int White_Error = pow(White[0]-RGB[0],2) + pow(White[1]-RGB[1],2) + pow(White[2]-RGB[2],2);
-    int Sum_Of_Square_Error = Black_Error + Blue_Error + Green_Error + Yellow_Error + Red_Error + White_Error;
-    possibility[1] = ((double)Sum_Of_Square_Error - (double)Black_Error)/(double)Sum_Of_Square_Error;
-    possibility[2] = ((double)Sum_Of_Square_Error - (double)Blue_Error)/(double)Sum_Of_Square_Error;
-    possibility[3] = ((double)Sum_Of_Square_Error - (double)Green_Error)/(double)Sum_Of_Square_Error;
-    possibility[4] = ((double)Sum_Of_Square_Error - (double)Yellow_Error)/(double)Sum_Of_Square_Error;
-    possibility[5] = ((double)Sum_Of_Square_Error - (double)Red_Error)/(double)Sum_Of_Square_Error;
-    possibility[6] = ((double)Sum_Of_Square_Error - (double)White_Error)/(double)Sum_Of_Square_Error;
-
-    printf("Black SQUARE ERROR is %i\n",Black_Error);
-    printf("Blue SQUARE ERROR is %i\n",Blue_Error);
-    printf("Green SQUARE ERROR is %i\n",Green_Error);
-    printf("Yellow SQUARE ERROR is %i\n",Yellow_Error);
-    printf("RED SQUARE ERROR is %i\n",Red_Error);
-    printf("White SQUARE ERROR is %i\n",White_Error);
-    printf("prossibility of Black is %2f\n",possibility[1]);
-    printf("prossibility of Blue is %2f\n",possibility[2]);
-    printf("prossibility of Green is %2f\n",possibility[3]);
-    printf("prossibility of Yellow is %2f\n",possibility[4]);
-    printf("prossibility of Red is %2f\n",possibility[5]);
-    printf("prossibility of White is %2f\n",possibility[6]);
-
-    for (int i =1; i < 7 ;i++){
-        if (possibility[i] > 0.98) {
-            possibility[0] = i;
-            return possibility[0];
-        }
-    }
-    possibility[0] = 2;
-    return possibility[0];
-    
-}
-
 /*!
  * This function gets your robot onto a street, wherever it is placed on the map. You can do this in many ways, but think
  * about what is the most effective and reliable way to detect a street and stop your robot once it's on it.
  *
- * @return int, 1 fail 0 success
+ * @return int, 1 success 0 fail
  */
 int find_street(void) {
-    printf("sensor value: %i\n", BT_read_colour_sensor(PORT_1));
-    return (0);
+    bool flag = true;
+    printf("find street !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    while(flag) {
+        if (Distinguish_Color() == 1 || Distinguish_Color() == 4 || Distinguish_Color() == 5) {
+            flag = false;
+            drive_along_street();
+        } else {
+            while(Distinguish_Color() != 1 && Distinguish_Color() != 4 && Distinguish_Color() != 5) {
+                BT_motor_port_start(MOTOR_A | MOTOR_B, 5);
+            }
+            if(Distinguish_Color() == 1) {
+                forward_small_2();
+                while(Distinguish_Color() != 1) {
+                    turn_backwards();
+                    turn_left_small();
+                    forward_small_2();
+                }
+            }
+        }
+    }
+    return 1;
 }
 
 /*!
@@ -283,14 +324,72 @@ int find_street(void) {
  * @return int, 1 fail 0 success
  */
 int drive_along_street(void) {
-    // if the robot find the street, then fellow the line.
-    // otherwise, keep turning until find the street.
-    if(find_street()) {
+    printf("ON THE ROAD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    while (1) {
+        // if the robot is on the road, then follow it.
+        while (Distinguish_Color() == 1) {
+            BT_motor_port_start(MOTOR_A | MOTOR_B, 10);
+            // if the robot is on the intersection, then go to FIND YELLOW state.
+        }
+        BT_all_stop(1);
+        int color = double_check();
+        if (color == 4) {
+            for (int i = 0; i <= 80000000; i++);
+            //BT_all_stop(1);
+            int scan_comp = 1;
+            /*
+            while (scan_comp == 1) {
 
-    } else {
+                if (scan_comp == 1) {
+                    printf("rescan intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+                    //rescan();
+                }
+            }*/
+            scan_comp = scan_intersection();
+            //if(tl != 3 || tr != 6 || br != 2 || bl != 6) {
+            printf("turn intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            int sc[4];
+            sc[0] = tl;
+            sc[1] = tr;
+            sc[2] = br;
+            sc[3] = bl;
+            printf("last turn choice is %i\n",turn);
+            update_beliefs(turn,sc);
+            robot_localization();
+            turn = go_to_target(rbt_x,rbt_y,rbt_dir,dest_x, dest_y);
+            if (turn == 1){
+                turn_choice = 0;
+                turn_at_intersection(0);
 
+            }else if (turn == 2){
+                turn_at_intersection(0);
+                turn_at_intersection(0);
+
+            }else if (turn == 3){
+                turn_choice = 1;
+                turn_at_intersection(1);
+            }
+
+            printf("forward intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            forward_small_1();
+            redflag = 0;
+            //
+            //    forward_small_1();
+            //}
+            // if the robot hit the wall, then go to FIND RED state.
+        } else if (color == 5) {
+            //BT_all_stop(1);
+            find_red();
+            // if the robot is not on the road, the road must be near the robot,
+            // then go to ADJUST state.
+        } else {
+            //BT_all_stop(1);
+            adjust();
+        }
     }
-    return (0);
+    BT_all_stop(0);
+    printf("arrive intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    return 0;
 }
 
 /*!
@@ -319,33 +418,61 @@ int drive_along_street(void) {
  *
  * @return int 1 fail 0 success
  */
-int scan_intersection(int *tl, int *tr, int *br, int *bl) {
-    /************************************************************************************************************************
-     *   TO DO  -   Complete this function
-     ***********************************************************************************************************************/
-
-    // Return invalid colour values, and a zero to indicate failure (you will replace this with your code)
-    *(tl) = -1;
-    *(tr) = -1;
-    *(br) = -1;
-    *(bl) = -1;
-
-    return (0);
+int scan_intersection() {
+    //turn_left_angle(45);
+    turn_45_degree_both_wheel(1);
+    forward_small_1();
+    tl = Distinguish_Color();
+    backward_small_1();
+    backward_small_1();
+    br = Distinguish_Color();
+    forward_small_1();
+    turn_90_degree_both_wheel(0);
+    turn_right_small();
+    forward_small_1();
+    //forward_small_3();
+    tr = Distinguish_Color();
+    backward_small_1();
+    backward_small_1();
+    bl = Distinguish_Color();
+    forward_small_1();
+    printf("tl = %i\n", tl);
+    printf("tr = %i\n", tr);
+    printf("br = %i\n", br);
+    printf("bl = %i\n", bl);
+    //forward_small_2();
+    //for(int i = 0; i <= 100000000; i ++);
+    turn_45_degree_both_wheel(1);
+    printf("scan intersection complete!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    if(tl == 1 || tr == 1 || br == 1 || bl == 1) {
+        printf("scan intersection fail*************************************************!\n");
+        return 1;
+    }
+    return 0;
 
 }
 
+/*!
+ * This function is used to have the robot turn either left or right at an intersection
+ * (obviously your bot can not justdrive forward!).
+ * You're free to implement this in any way you like, but it should reliably leave your bot facing the correct direction
+ * and on a street it can follow.
+ * @param turn_direction 0 right, 1 left
+ * @return indicate success or failure, or to inform your code of the state of the bot
+ */
 int turn_at_intersection(int turn_direction) {
+    if(turn_direction == 0) {
+        turn_90_degree_both_wheel(0);
+    } else {
+        turn_90_degree_both_wheel(1);
+        //turn_left_small();
+        //turn_left_small();
+    }
+    // move the robot out of the intersection.
     /*
-     * This function is used to have the robot turn either left or right at an intersection (obviously your bot can not just
-     * drive forward!).
-     *
-     * If turn_direction=0, turn right, else if turn_direction=1, turn left.
-     *
-     * You're free to implement this in any way you like, but it should reliably leave your bot facing the correct direction
-     * and on a street it can follow.
-     *
-     * You can use the return value to indicate success or failure, or to inform your code of the state of the bot
-     */
+    while(Distinguish_Color() == 4) {
+        forward_small_2();
+    }*/
     return (0);
 }
 
@@ -361,191 +488,452 @@ void update_beliefs(int last_act, int intersection_reading[4]){
             last_beliefs[i + (j * sx)][3] = beliefs[i + (j * sx)][3];
         }
     }
+    //acting 
+    if (redflag){// last point read is red
+        for (int j = 0; j < sy; j++) {
+            for (int i = 0; i < sx; i++) {
 
+                //acting
+                if (last_act == 0){ // going up
+                    if (i + 1 < sx) {
+                        beliefs[i + (j * sx)][3] = 0;
+                    } else {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + (j * sx)][1] * 0.8;
+                        if (j - 1 >= 0){
+                            beliefs[i + (j * sx)][3] += last_beliefs[i + ((j - 1) * sx)][1] * 0.05;
+                        }
+                        if (j + 1 < sy){
+                            beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][1] * 0.05;
+                        }
+                    }
+                    if (j - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + (j * sx)][0] * 0.8;
+                        if (i - 1 >= 0){
+                            beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][0] * 0.05;
+                        }
+                        if (i + 1 < sx){
+                            beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + (j * sx)][0] * 0.05;
+                        }
+                    }
+                    if (i - 1 >= 0) {
+                        beliefs[i + (j * sx)][1] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i + (j * sx)][3] * 0.8;
+                        if (j - 1 >= 0){
+                            beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][3] * 0.05;
+                        }
+                        if (j + 1 < sy){
+                            beliefs[i + (j * sx)][1] += last_beliefs[i + ((j + 1) * sx)][3] * 0.05;
+                        }
+                    }
+                    if (j + 1 < sy) {
+                        beliefs[i + (j * sx)][0] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + (j * sx)][2] * 0.8;
+                        if (i - 1 >= 0){
+                            beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + (j * sx)][2] * 0.05;
+                        }
+                        if (i + 1 < sx){
+                            beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][2] * 0.05;
+                        }
+                    }
+                }
+                if (last_act == 1){// turn right
+                    if (i + 1 < sx) {
+                        beliefs[i + (j * sx)][3] = 0;
+                    } else {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + (j * sx)][0] * 0.8;
+                        if (j - 1 >= 0){
+                            beliefs[i + (j * sx)][3] += last_beliefs[i + ((j - 1) * sx)][0] * 0.05;
+                        }
+                        if (j + 1 < sy){
+                            beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][0] * 0.05;
+                        }
+                    }
+                    if (j - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + (j * sx)][3] * 0.8;
+                        if (i - 1 >= 0){
+                            beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][3] * 0.05;
+                        }
+                        if (i + 1 < sx){
+                            beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + (j * sx)][3] * 0.05;
+                        }
+                    }
+                    if (i - 1 >= 0) {
+                        beliefs[i + (j * sx)][1] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i + (j * sx)][2] * 0.8;
+                        if (j - 1 >= 0){
+                            beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][2] * 0.05;
+                        }
+                        if (j + 1 < sy){
+                            beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][2] * 0.05;
+                        }
+                    }
+                    if (j + 1 < sy) {
+                        beliefs[i + (j * sx)][0] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + (j * sx)][1] * 0.8;
+                        if (i - 1 >= 0){
+                            beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + (j * sx)][1] * 0.05;
+                        }
+                        if (i + 1 < sx){
+                            beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][1] * 0.05;
+                        }
+                    }
+                }
+                if (last_act == 2){//turn back
+                    if (i + 1 < sx) {
+                        beliefs[i + (j * sx)][3] = 0;
+                    } else {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + (j * sx)][3] * 0.8;
+                        if (j - 1 >= 0){
+                            beliefs[i + (j * sx)][3] += last_beliefs[i + ((j - 1) * sx)][3] * 0.05;
+                        }
+                        if (j + 1 < sy){
+                            beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][3] * 0.05;
+                        }
+                    }
+                    if (j - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + (j * sx)][2] * 0.8;
+                        if (i - 1 >= 0){
+                            beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][2] * 0.05;
+                        }
+                        if (i + 1 < sx){
+                            beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + (j * sx)][2] * 0.05;
+                        }
+                    }
+                    if (i - 1 >= 0) {
+                        beliefs[i + (j * sx)][1] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i + (j * sx)][1] * 0.8;
+                        if (j - 1 >= 0){
+                            beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][1] * 0.05;
+                        }
+                        if (j + 1 < sy){
+                            beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][1] * 0.05;
+                        }
+                    }
+                    if (j + 1 < sy) {
+                        beliefs[i + (j * sx)][0] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + (j * sx)][0] * 0.8;
+                        if (i - 1 >= 0){
+                            beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + (j * sx)][0] * 0.05;
+                        }
+                        if (i + 1 < sx){
+                            beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][0] * 0.05;
+                        }
+                    }
+                } 
+                if (last_act == 3){//turn left
+                    if (i + 1 < sx) {
+                        beliefs[i + (j * sx)][3] = 0;
+                    } else {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + (j * sx)][2] * 0.8;
+                        if (j - 1 >= 0){
+                            beliefs[i + (j * sx)][3] += last_beliefs[i + ((j - 1) * sx)][2] * 0.05;
+                        }
+                        if (j + 1 < sy){
+                            beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][2] * 0.05;
+                        }
+                    }
+                    if (j - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + (j * sx)][1] * 0.8;
+                        if (i - 1 >= 0){
+                            beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][1] * 0.05;
+                        }
+                        if (i + 1 < sx){
+                            beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + (j * sx)][1] * 0.05;
+                        }
+                    }
+                    if (i - 1 >= 0) {
+                        beliefs[i + (j * sx)][1] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i + (j * sx)][0] * 0.8;
+                        if (j - 1 >= 0){
+                            beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][0] * 0.05;
+                        }
+                        if (j + 1 < sy){
+                            beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][0] * 0.05;
+                        }
+                    }
+                    if (j + 1 < sy) {
+                        beliefs[i + (j * sx)][0] = 0;
+                    }else {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + (j * sx)][3] * 0.8;
+                        if (i - 1 >= 0){
+                            beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + (j * sx)][3] * 0.05;
+                        }
+                        if (i + 1 < sx){
+                            beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][3] * 0.05;
+                        }
+                    }
+                }
+                
+                //stay at the point
+                beliefs[i + (j * sx)][0] += last_beliefs[i + (j * sx)][0] * 0.1;
+                beliefs[i + (j * sx)][1] += last_beliefs[i + (j * sx)][1] * 0.1;
+                beliefs[i + (j * sx)][2] += last_beliefs[i + (j * sx)][2] * 0.1;
+                beliefs[i + (j * sx)][3] += last_beliefs[i + (j * sx)][3] * 0.1;
+
+                C = C + beliefs[i + (j * sx)][0] 
+                  + beliefs[i + (j * sx)][1]
+                  + beliefs[i + (j * sx)][2]
+                  + beliefs[i + (j * sx)][3];
+
+            }
+        }
+    }else if (last_act != -1){ //first time move, no act before
+        for (int j = 0; j < sy; j++) {
+            for (int i = 0; i < sx; i++) {
+
+                //acting
+                if (last_act == 0){ // going up
+                    //do great job
+                    if (i + 1 < sx) {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][3] * 0.8;
+                    } else {
+                        beliefs[i + (j * sx)][3] = 0;
+                    }
+                    if (j - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][2] * 0.8;
+                    }else {
+                        beliefs[i + (j * sx)][2] = 0;
+                    }
+                    if (i - 1 >= 0) {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][1] * 0.8;
+                    }else {
+                        beliefs[i + (j * sx)][1] = 0;
+                    }
+                    if (j + 1 < sy) {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][0] * 0.8;
+                    }else {
+                        beliefs[i + (j * sx)][0] = 0;
+                    }
+
+                    //from left one
+                    if (i + 1 < sx && j - 1 >= 0) {
+                        beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j - 1) * sx)][3] * 0.05;
+                    }
+                    if (j - 1 >= 0 && i - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j - 1) * sx)][2] * 0.05;
+                    }
+                    if (i - 1 >= 0 && j + 1 < sy) {
+                        beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j + 1) * sx)][1] * 0.05;
+                    }
+                    if (j + 1 < sy && i + 1 < sx) {
+                        beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j + 1) * sx)][0] * 0.05;
+                    }
+
+                    //from right one
+                    if (i + 1 < sx && j + 1 >= 0) {
+                        beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j + 1) * sx)][3] * 0.05;
+                    }
+                    if (j - 1 >= 0 && i + 1 >= 0) {
+                        beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + ((j - 1) * sx)][2] * 0.05;
+                    }
+                    if (i - 1 >= 0 && j - 1 < sy) {
+                        beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j - 1) * sx)][1] * 0.05;
+                    }
+                    if (j + 1 < sy && i - 1 < sx) {
+                        beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + ((j + 1) * sx)][0] * 0.05;
+                    }
+                }
+                if (last_act == 1){// turn right
+                    //do great job
+                    if (i + 1 < sx) {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][2] * 0.8;
+                    }else {
+                        beliefs[i + (j * sx)][3] = 0;
+                    }
+                    if (j - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][1] * 0.8;
+                    }
+                    else {
+                        beliefs[i + (j * sx)][2] = 0;
+                    }
+                    if (i - 1 >= 0) {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][0] * 0.8;
+                    }
+                    else {
+                        beliefs[i + (j * sx)][1] = 0;
+                    }
+                    if (j + 1 < sy) {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][3] * 0.8;
+                    }else {
+                        beliefs[i + (j * sx)][0] = 0;
+                    }
+
+                    //from the left one
+                    if (i + 1 < sx && j - 1 >= 0) {
+                        beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j - 1) * sx)][2] * 0.05;
+                    }
+                    if (j - 1 >= 0 && i - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j - 1) * sx)][1] * 0.05;
+                    }
+                    if (i - 1 >= 0 && j + 1 < sy) {
+                        beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j + 1) * sx)][0] * 0.05;
+                    }
+                    if (j + 1 < sy && i + 1 < sx) {
+                        beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j + 1) * sx)][3] * 0.05;
+                    }
+
+                    //from the right one
+                    if (i + 1 < sx && j + 1 >= 0) {
+                        beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j + 1) * sx)][2] * 0.05;
+                    }
+                    if (j - 1 >= 0 && i + 1 >= 0) {
+                        beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + ((j - 1) * sx)][1] * 0.05;
+                    }
+                    if (i - 1 >= 0 && j - 1 < sy) {
+                        beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j - 1) * sx)][0] * 0.05;
+                    }
+                    if (j + 1 < sy && i - 1 < sx) {
+                        beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + ((j + 1) * sx)][3] * 0.05;
+                    }
+                }
+                if (last_act == 2){//turn back
+                    //do great job
+                    if (i + 1 < sx) {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][1] * 0.8;
+                    }else{
+                        beliefs[i + (j * sx)][3] = 0;
+                    }
+                    if (j - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][0] * 0.8;
+                    }else{
+                        beliefs[i + (j * sx)][2] = 0;
+                    }
+                    if (i - 1 >= 0) {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][3] * 0.8;
+                    }else{
+                        beliefs[i + (j * sx)][1] = 0;
+                    }
+                    if (j + 1 < sy) {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][2] * 0.8;
+                    }else{
+                        beliefs[i + (j * sx)][0] = 0;
+                    }
+
+                    //from the left one
+                    if (i + 1 < sx && j - 1 >= 0) {
+                        beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j - 1) * sx)][1] * 0.05;
+                    }
+                    if (j - 1 >= 0 && i - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j - 1) * sx)][0] * 0.05;
+                    }
+                    if (i - 1 >= 0 && j + 1 < sy) {
+                        beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j + 1) * sx)][3] * 0.05;
+                    }
+                    if (j + 1 < sy && i + 1 < sx) {
+                        beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j + 1) * sx)][2] * 0.05;
+                    }
+
+                    //from the right one
+                    if (i + 1 < sx && j + 1 >= 0) {
+                        beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j + 1) * sx)][1] * 0.05;
+                    }
+                    if (j - 1 >= 0 && i + 1 >= 0) {
+                        beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + ((j - 1) * sx)][0] * 0.05;
+                    }
+                    if (i - 1 >= 0 && j - 1 < sy) {
+                        beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j - 1) * sx)][3] * 0.05;
+                    }
+                    if (j + 1 < sy && i - 1 < sx) {
+                        beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + ((j + 1) * sx)][2] * 0.05;
+                    }
+                } 
+                if (last_act == 3){//turn left
+                    //do great job
+                    if (i + 1 < sx) {
+                        beliefs[i + (j * sx)][3] = last_beliefs[i + 1 + (j * sx)][0] * 0.8;
+                    }else{
+                        beliefs[i + (j * sx)][3] = 0;
+                    }
+                    if (j - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] = last_beliefs[i + ((j - 1) * sx)][3] * 0.8;
+                    }else{
+                        beliefs[i + (j * sx)][2] = 0;
+                    }
+                    if (i - 1 >= 0) {
+                        beliefs[i + (j * sx)][1] = last_beliefs[i - 1 + (j * sx)][2] * 0.8;
+                    }else{
+                        beliefs[i + (j * sx)][1] = 0;
+                    }
+                    if (j + 1 < sy) {
+                        beliefs[i + (j * sx)][0] = last_beliefs[i + ((j + 1) * sx)][1] * 0.8;
+                    }else{
+                        beliefs[i + (j * sx)][0] = 0;
+                    }
+                    //from the left one
+                    if (i + 1 < sx && j - 1 >= 0) {
+                        beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j - 1) * sx)][0] * 0.05;
+                    }
+                    if (j - 1 >= 0 && i - 1 >= 0) {
+                        beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j - 1) * sx)][3] * 0.05;
+                    }
+                    if (i - 1 >= 0 && j + 1 < sy) {
+                        beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j + 1) * sx)][2] * 0.05;
+                    }
+                    if (j + 1 < sy && i + 1 < sx) {
+                        beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j + 1) * sx)][1] * 0.05;
+                    }
+                    //from the right one
+                    if (i + 1 < sx && j + 1 >= 0) {
+                        beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j + 1) * sx)][0] * 0.05;
+                    }
+                    if (j - 1 >= 0 && i + 1 >= 0) {
+                        beliefs[i + (j * sx)][2] += last_beliefs[i + 1 + ((j - 1) * sx)][3] * 0.05;
+                    }
+                    if (i - 1 >= 0 && j - 1 < sy) {
+                        beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j - 1) * sx)][2] * 0.05;
+                    }
+                    if (j + 1 < sy && i - 1 < sx) {
+                        beliefs[i + (j * sx)][0] += last_beliefs[i - 1 + ((j + 1) * sx)][1] * 0.05;
+                    }
+                }
+                
+                //stay at the point
+                beliefs[i + (j * sx)][0] += last_beliefs[i + (j * sx)][0] * 0.1;
+                beliefs[i + (j * sx)][1] += last_beliefs[i + (j * sx)][1] * 0.1;
+                beliefs[i + (j * sx)][2] += last_beliefs[i + (j * sx)][2] * 0.1;
+                beliefs[i + (j * sx)][3] += last_beliefs[i + (j * sx)][3] * 0.1;
+
+                C = C + beliefs[i + (j * sx)][0] 
+                  + beliefs[i + (j * sx)][1]
+                  + beliefs[i + (j * sx)][2]
+                  + beliefs[i + (j * sx)][3];
+
+            }
+        }
+        printf("After acting\n");
+        for (int j = 0; j < sy; j++) { //normolize and print
+            for (int i = 0; i < sx; i++) {
+                beliefs[i + (j * sx)][0] = beliefs[i + (j * sx)][0] / C;
+                beliefs[i + (j * sx)][1] = beliefs[i + (j * sx)][1] / C;
+                beliefs[i + (j * sx)][2] = beliefs[i + (j * sx)][2] / C;
+                beliefs[i + (j * sx)][3] = beliefs[i + (j * sx)][3] / C;
+                printf("i is %i j is %i :\n",i , j );
+                printf("direction is 0 belief is %2f \n", beliefs[i + (j * sx)][0]);
+                printf("direction is 1 belief is %2f \n", beliefs[i + (j * sx)][1]);
+                printf("direction is 2 belief is %2f \n", beliefs[i + (j * sx)][2]);
+                printf("direction is 3 belief is %2f \n", beliefs[i + (j * sx)][3]);
+                printf("\n");
+            }
+        }
+    }
+    //sensing
     for (int j = 0; j < sy; j++) {
         for (int i = 0; i < sx; i++) {
-
-            //acting
-            if (last_act == 0){ // going up
-                //do great job
-                if (i + 1 < sx) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][0] * 0.5;
-                }
-                if (j - 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][1] * 0.5;
-                }
-                if (i - 1 >= 0) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][2] * 0.5;
-                }
-                if (j + 1 < sy) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][3] * 0.5;
-                }
-
-                //from left one
-                if (i + 1 < sx && j - 1 >= 0) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j - 1) * sx)][0] * 0.25;
-                }
-                if (j - 1 >= 0 && i - 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j - 1) * sx)][1] * 0.25;
-                }
-                if (i - 1 >= 0 && j + 1 < sy) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j + 1) * sx)][2] * 0.25;
-                }
-                if (j + 1 < sy && i + 1 < sx) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j + 1) * sx)][3] * 0.25;
-                }
-
-                //from right one
-                if (i + 1 < sx && j + 1 >= 0) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j + 1) * sx)][0] * 0.15;
-                }
-                if (j - 1 >= 0 && i + 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i + 1 + ((j - 1) * sx)][1] * 0.15;
-                }
-                if (i - 1 >= 0 && j - 1 < sy) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j - 1) * sx)][2] * 0.15;
-                }
-                if (j + 1 < sy && i - 1 < sx) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i - 1 + ((j + 1) * sx)][3] * 0.15;
-                }
-
-
-            }
-            if (last_act == 1){// turn right
-                //do great job
-                if (i + 1 < sx) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][3] * 0.5;
-                }
-                if (j - 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][0] * 0.5;
-                }
-                if (i - 1 >= 0) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][1] * 0.5;
-                }
-                if (j + 1 < sy) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][2] * 0.5;
-                }
-
-                //from the left one
-                if (i + 1 < sx && j - 1 >= 0) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j - 1) * sx)][3] * 0.25;
-                }
-                if (j - 1 >= 0 && i - 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j - 1) * sx)][0] * 0.25;
-                }
-                if (i - 1 >= 0 && j + 1 < sy) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j + 1) * sx)][1] * 0.25;
-                }
-                if (j + 1 < sy && i + 1 < sx) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j + 1) * sx)][2] * 0.25;
-                }
-
-                //from the right one
-                if (i + 1 < sx && j + 1 >= 0) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j + 1) * sx)][3] * 0.15;
-                }
-                if (j - 1 >= 0 && i + 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i + 1 + ((j - 1) * sx)][0] * 0.15;
-                }
-                if (i - 1 >= 0 && j - 1 < sy) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j - 1) * sx)][1] * 0.15;
-                }
-                if (j + 1 < sy && i - 1 < sx) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i - 1 + ((j + 1) * sx)][2] * 0.15;
-                }
-            }
-            if (last_act == 2){//turn back
-                //do great job
-                if (i + 1 < sx) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][2] * 0.5;
-                }
-                if (j - 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][3] * 0.5;
-                }
-                if (i - 1 >= 0) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][0] * 0.5;
-                }
-                if (j + 1 < sy) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][1] * 0.5;
-                }
-
-                //from the left one
-                if (i + 1 < sx && j - 1 >= 0) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j - 1) * sx)][2] * 0.25;
-                }
-                if (j - 1 >= 0 && i - 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j - 1) * sx)][3] * 0.25;
-                }
-                if (i - 1 >= 0 && j + 1 < sy) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j + 1) * sx)][0] * 0.25;
-                }
-                if (j + 1 < sy && i + 1 < sx) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j + 1) * sx)][1] * 0.25;
-                }
-
-                //from the right one
-                if (i + 1 < sx && j + 1 >= 0) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j + 1) * sx)][2] * 0.15;
-                }
-                if (j - 1 >= 0 && i + 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i + 1 + ((j - 1) * sx)][3] * 0.15;
-                }
-                if (i - 1 >= 0 && j - 1 < sy) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j - 1) * sx)][0] * 0.15;
-                }
-                if (j + 1 < sy && i - 1 < sx) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i - 1 + ((j + 1) * sx)][1] * 0.15;
-                }
-
-            } 
-            if (last_act == 3){//turn left
-                //do great job
-                if (i + 1 < sx) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + (j * sx)][1] * 0.5;
-                }
-                if (j - 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i + ((j - 1) * sx)][2] * 0.5;
-                }
-                if (i - 1 >= 0) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + (j * sx)][3] * 0.5;
-                }
-                if (j + 1 < sy) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i + ((j + 1) * sx)][0] * 0.5;
-                }
-
-                //from the left one
-                if (i + 1 < sx && j - 1 >= 0) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j - 1) * sx)][1] * 0.25;
-                }
-                if (j - 1 >= 0 && i - 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i - 1 + ((j - 1) * sx)][2] * 0.25;
-                }
-                if (i - 1 >= 0 && j + 1 < sy) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j + 1) * sx)][3] * 0.25;
-                }
-                if (j + 1 < sy && i + 1 < sx) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i + 1 + ((j + 1) * sx)][0] * 0.25;
-                }
-
-                //from the right one
-                if (i + 1 < sx && j + 1 >= 0) {
-                    beliefs[i + (j * sx)][0] += last_beliefs[i + 1 + ((j + 1) * sx)][1] * 0.15;
-                }
-                if (j - 1 >= 0 && i + 1 >= 0) {
-                    beliefs[i + (j * sx)][1] += last_beliefs[i + 1 + ((j - 1) * sx)][2] * 0.15;
-                }
-                if (i - 1 >= 0 && j - 1 < sy) {
-                    beliefs[i + (j * sx)][2] += last_beliefs[i - 1 + ((j - 1) * sx)][3] * 0.15;
-                }
-                if (j + 1 < sy && i - 1 < sx) {
-                    beliefs[i + (j * sx)][3] += last_beliefs[i - 1 + ((j + 1) * sx)][0] * 0.15;
-                }
-            }
-            //stay at the point
-            beliefs[i + (j * sx)][0] += last_beliefs[i + (j * sx)][0] * 0.1;
-            beliefs[i + (j * sx)][1] += last_beliefs[i + (j * sx)][1] * 0.1;
-            beliefs[i + (j * sx)][2] += last_beliefs[i + (j * sx)][2] * 0.1;
-            beliefs[i + (j * sx)][3] += last_beliefs[i + (j * sx)][3] * 0.1;
 
             //sensing
             if (map[i + (j * sx)][0] == intersection_reading[0] 
@@ -589,17 +977,23 @@ void update_beliefs(int last_act, int intersection_reading[4]){
                   + beliefs[i + (j * sx)][3];
         }
     }
-    for (int j = 0; j < sy; j++) {
+    for (int j = 0; j < sy; j++) { //normolize and print
         for (int i = 0; i < sx; i++) {
             beliefs[i + (j * sx)][0] = beliefs[i + (j * sx)][0] / C;
             beliefs[i + (j * sx)][1] = beliefs[i + (j * sx)][1] / C;
             beliefs[i + (j * sx)][2] = beliefs[i + (j * sx)][2] / C;
             beliefs[i + (j * sx)][3] = beliefs[i + (j * sx)][3] / C;
+            printf("i is %i j is %i :\n",i , j );
+            printf("direction is 0 belief is %2f \n", beliefs[i + (j * sx)][0]);
+            printf("direction is 1 belief is %2f \n", beliefs[i + (j * sx)][1]);
+            printf("direction is 2 belief is %2f \n", beliefs[i + (j * sx)][2]);
+            printf("direction is 3 belief is %2f \n", beliefs[i + (j * sx)][3]);
+            printf("\n");
         }
     }
 }
 
-int robot_localization(int *robot_x, int *robot_y, int *direction) {
+int robot_localization() {
     /*  This function implements the main robot localization process. You have to write all code that will control the robot
      *  and get it to carry out the actions required to achieve localization.
      *
@@ -627,7 +1021,7 @@ int robot_localization(int *robot_x, int *robot_y, int *direction) {
      *  For each of the control functions, however, you will need to use the EV3 API, so be sure to become familiar with
      *  it.
      *
-     *  In terms of sensor management - the API allows you to read colours either as indexed values or RGB, it's up to
+     *  In terms of sensor management - the API allows you to read colours either as indexed values or rgb, it's up to
      *  you which one to use, and how to interpret the noisy, unreliable data you're likely to get from the sensor
      *  in order to update beliefs.
      *
@@ -653,9 +1047,62 @@ int robot_localization(int *robot_x, int *robot_y, int *direction) {
 
     // Return an invalid location/direction and notify that localization was unsuccessful (you will delete this and replace it
     // with your code).
-    *(robot_x) = -1;
-    *(robot_y) = -1;
-    *(direction) = -1;
+    double max = -1;
+    rbt_x, rbt_y, rbt_dir = -1;
+
+
+    for (int j = 0; j < sy; j++) {
+        for (int i = 0; i < sx; i++) {
+            if (max < beliefs[i + (j * sx)][0]){
+                max = beliefs[i + (j * sx)][0];
+                rbt_x = i;
+                rbt_y = j;
+                rbt_dir = 0;
+            }else if (max < beliefs[i + (j * sx)][1]){
+                max = beliefs[i + (j * sx)][1];
+                rbt_x = i;
+                rbt_y = j;
+                rbt_dir = 1;
+            }else if (max < beliefs[i + (j * sx)][2]){
+                max = beliefs[i + (j * sx)][2];
+                rbt_x = i;
+                rbt_y = j;
+                rbt_dir = 2;
+            }else if (max < beliefs[i + (j * sx)][3]){
+                max = beliefs[i + (j * sx)][3];
+                rbt_x = i;
+                rbt_y = j;
+                rbt_dir = 3;
+            }
+        }
+    }
+    printf("Max is %2f rbt_x is %i rbt_y is %i rbt_dir is %i\n", max,rbt_x,rbt_y,rbt_dir);
+    for (int j = 0; j < sy; j++) {
+        for (int i = 0; i < sx; i++) {
+            if (max == beliefs[i + (j * sx)][0] && (rbt_x != i || rbt_y != j || rbt_dir != 0)){
+                rbt_x = -1;
+                rbt_y = -1;
+                rbt_dir = -1;
+                return(-1);
+            }else if (max == beliefs[i + (j * sx)][1] && (rbt_x != i || rbt_y != j || rbt_dir != 1)){
+                rbt_x = -1;
+                rbt_y = -1;
+                rbt_dir = -1;
+                return(-1);
+            }else if (max == beliefs[i + (j * sx)][2] && (rbt_x != i || rbt_y != j || rbt_dir != 2)){
+                rbt_x = -1;
+                rbt_y = -1;
+                rbt_dir = -1;
+                return(-1);
+            }else if (max == beliefs[i + (j * sx)][3] && (rbt_x != i || rbt_y != j || rbt_dir != 3)){
+                rbt_x = -1;
+                rbt_y = -1;
+                rbt_dir = -1;
+                return(-1);
+            }
+        }
+    }
+    printf("Find the localization: i is %i j is %i direction is %i \n", rbt_x,rbt_y,rbt_dir);
     return (0);
 }
 
@@ -680,29 +1127,182 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
     /************************************************************************************************************************
      *   TO DO  -   Complete this function
      ***********************************************************************************************************************/
+    if (robot_x == target_x && robot_y == target_y){
+        printf("success!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        exit(0);
+    }
+
+    if (robot_x == -1 && robot_y == -1){
+        printf("can not localization, keep driving!!!!!!!!!!!!!!!!!!!!!!\n");
+        return(0);
+    }
+
+    if (robot_x == target_x){
+        if (robot_y < target_y){
+            if (direction == 0){
+                return 2;
+            }else if (direction == 1){
+                return 1;
+            }else if (direction == 2){
+                return 0;
+            }else{ // directiont ==3
+                return 3;
+            }
+        }else{//robot_y > target_y
+            if (direction == 0){
+                return 0;
+            }else if (direction == 1){
+                return 3;
+            }else if (direction == 2){
+                return 2;
+            }else{ // directiont ==3
+                return 1;
+            }
+        }
+
+    }else if (robot_x < target_x){
+        if (direction == 0){
+            return 1;
+        }else if (direction == 1){
+            return 0;
+        }else if (direction == 2){
+            return 3;
+        }else{ // directiont ==3
+            return 2;
+        }
+    }else{ //robot_x > target_x
+        if (direction == 0){
+            return 3;
+        }else if (direction == 1){
+            return 2;
+        }else if (direction == 2){
+            return 1;
+        }else{ // direction == 3
+            return 0;
+        }
+
+    }
+
     return (0);
 }
 
+/*!
+ * This function is called when the program is started with -1  -1 for the target location.
+ *
+ * You DO NOT NEED TO IMPLEMENT ANYTHING HERE - but it is strongly recommended as good calibration will make sensor
+ * readings more reliable and will make your code more resistent to changes in illumination, map quality, or battery
+ * level.
+ *
+ * The principle is - Your code should allow you to sample the different colours in the map, and store representative
+ * values that will help you figure out what colours the sensor is reading given the current conditions.
+ *
+ * Inputs - None
+ * Return values - None - your code has to save the calibration information to a file, for later use (see in main())
+ *
+ * How to do this part is up to you, but feel free to talk with your TA and instructor about it!
+ */
 void calibrate_sensor(void) {
-    /*
-     * This function is called when the program is started with -1  -1 for the target location.
-     *
-     * You DO NOT NEED TO IMPLEMENT ANYTHING HERE - but it is strongly recommended as good calibration will make sensor
-     * readings more reliable and will make your code more resistent to changes in illumination, map quality, or battery
-     * level.
-     *
-     * The principle is - Your code should allow you to sample the different colours in the map, and store representative
-     * values that will help you figure out what colours the sensor is reading given the current conditions.
-     *
-     * Inputs - None
-     * Return values - None - your code has to save the calibration information to a file, for later use (see in main())
-     *
-     * How to do this part is up to you, but feel free to talk with your TA and instructor about it!
-     */
 
     /************************************************************************************************************************
      *   OIPTIONAL TO DO  -   Complete this function
      ***********************************************************************************************************************/
+
+    printf("=Select which the colour you want to calibration =\n");
+    printf("1 Black  calibration,Please enter: b\n");
+    printf("2 Blue   calibration,Please enter: u\n");
+    printf("3 Green  calibration,Please enter: g\n");
+    printf("4 Yellow calibration,Please enter: y\n");
+    printf("5 Red    calibration,Please enter: r\n");
+    printf("6 White  calibration,Please enter: w\n");
+    printf("Q Exit   calibration,Please enter: q\n");
+    printf("=Select which the colour you want to calibration =\n");
+    char c = getchar();
+    while (c != 'q') {
+        getchar();
+        switch (c) {
+            case 'b':
+                printf("1 Black  calibration\n");
+                Read_sensor();
+                Black[0] = rgb[0];
+                Black[1] = rgb[1];
+                Black[2] = rgb[2];
+                printf("Black_RGB %i %i %i\n", rgb[0], rgb[1], rgb[2]);
+                break;
+            case 'u':
+                printf("2 Blue   calibration\n");
+                Read_sensor();
+                Blue[0] = rgb[0];
+                Blue[1] = rgb[1];
+                Blue[2] = rgb[2];
+                printf("Blue_RGB %i %i %i\n", rgb[0], rgb[1], rgb[2]);
+                break;
+            case 'g':
+                printf("3 Green  calibration\n");
+                Read_sensor();
+                Green[0] = rgb[0];
+                Green[1] = rgb[1];
+                Green[2] = rgb[2];
+                printf("Green_RGB %i %i %i\n", rgb[0], rgb[1], rgb[2]);
+                break;
+            case 'y':
+                printf("4 Yellow calibration\n");
+                Read_sensor();
+                Yellow[0] = rgb[0];
+                Yellow[1] = rgb[1];
+                Yellow[2] = rgb[2];
+                printf("Yellow_RGB %i %i %i\n", rgb[0], rgb[1], rgb[2]);
+                break;
+            case 'r':
+                printf("5 Red    calibration\n");
+                Read_sensor();
+                Red[0] = rgb[0];
+                Red[1] = rgb[1];
+                Red[2] = rgb[2];
+                printf("Red_RGB %i %i %i\n", rgb[0], rgb[1], rgb[2]);
+                break;
+            case 'w':
+                printf("6 White  calibrationU\n");
+                Read_sensor();
+                White[0] = rgb[0];
+                White[1] = rgb[1];
+                White[2] = rgb[2];
+                printf("Black_RGB %i %i %i\n", rgb[0], rgb[1], rgb[2]);
+                break;
+
+            default:
+                printf("Please enter b u g y r w\n");
+        }
+        printf("=Select which the colour you want to calibration =\n");
+        printf("1 Black  calibration,Please enter: b\n");
+        printf("2 Blue   calibration,Please enter: u\n");
+        printf("3 Green  calibration,Please enter: g\n");
+        printf("4 Yellow calibration,Please enter: y\n");
+        printf("5 Red    calibration,Please enter: r\n");
+        printf("6 White  calibration,Please enter: w\n");
+        printf("Q Exit   calibration,Please enter: q\n");
+        printf("=================================================\n");
+        c = getchar();
+
+    }
+    //save the initail value
+    FILE *fp;
+
+    fp = fopen(FILE_NAME, "wb");
+    if (fp == NULL) {
+        printf("cann't open %s\n", FILE_NAME);
+        exit(EXIT_FAILURE);
+    }
+    for (int i = 0; i < 3; i++) {
+        fprintf(fp, "%i\n", Black[i]);
+        fprintf(fp, "%i\n", Blue[i]);
+        fprintf(fp, "%i\n", Green[i]);
+        fprintf(fp, "%i\n", Yellow[i]);
+        fprintf(fp, "%i\n", Red[i]);
+        fprintf(fp, "%i\n", White[i]);
+    }
+    fclose(fp);
+
+
     fprintf(stderr, "Calibration function called!\n");
 }
 
@@ -871,7 +1471,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
             if (R == 0 && G == 255 && B == 0) map[idx][0] = 3;
             else if (R == 0 && G == 0 && B == 255) map[idx][0] = 2;
             else if (R == 255 && G == 255 && B == 255) map[idx][0] = 6;
-            else fprintf(stderr, "Colour is not valid for intersection %d,%d, Top-Left RGB=%d,%d,%d\n", i, j, R, G, B);
+            else fprintf(stderr, "Colour is not valid for intersection %d,%d, Top-Left rgb=%d,%d,%d\n", i, j, R, G, B);
 
             // Top-right
             x += 2 * wx;
@@ -881,7 +1481,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
             if (R == 0 && G == 255 && B == 0) map[idx][1] = 3;
             else if (R == 0 && G == 0 && B == 255) map[idx][1] = 2;
             else if (R == 255 && G == 255 && B == 255) map[idx][1] = 6;
-            else fprintf(stderr, "Colour is not valid for intersection %d,%d, Top-Right RGB=%d,%d,%d\n", i, j, R, G, B);
+            else fprintf(stderr, "Colour is not valid for intersection %d,%d, Top-Right rgb=%d,%d,%d\n", i, j, R, G, B);
 
             // Bottom-right
             y += 2 * wy;
@@ -892,7 +1492,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
             else if (R == 0 && G == 0 && B == 255) map[idx][2] = 2;
             else if (R == 255 && G == 255 && B == 255) map[idx][2] = 6;
             else
-                fprintf(stderr, "Colour is not valid for intersection %d,%d, Bottom-Right RGB=%d,%d,%d\n", i, j, R, G,
+                fprintf(stderr, "Colour is not valid for intersection %d,%d, Bottom-Right rgb=%d,%d,%d\n", i, j, R, G,
                         B);
 
             // Bottom-left
@@ -904,7 +1504,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
             else if (R == 0 && G == 0 && B == 255) map[idx][3] = 2;
             else if (R == 255 && G == 255 && B == 255) map[idx][3] = 6;
             else
-                fprintf(stderr, "Colour is not valid for intersection %d,%d, Bottom-Left RGB=%d,%d,%d\n", i, j, R, G,
+                fprintf(stderr, "Colour is not valid for intersection %d,%d, Bottom-Left rgb=%d,%d,%d\n", i, j, R, G,
                         B);
 
             fprintf(stderr, "Colours for this intersection: %d, %d, %d, %d\n", map[idx][0], map[idx][1], map[idx][2],
@@ -918,7 +1518,7 @@ int parse_map(unsigned char *map_img, int rx, int ry) {
 
 unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
     // Reads an image from a .ppm file. A .ppm file is a very simple image representation
-    // format with a text header followed by the binary RGB data at 24bits per pixel.
+    // format with a text header followed by the binary rgb data at 24bits per pixel.
     // The header has the following form:
     //
     // P6
@@ -933,7 +1533,7 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
     // as number of pixels in x and number of pixels in y.
     // The final line of the header stores the maximum value for pixels in the image,
     // usually 255.
-    // After this last header line, binary data stores the RGB values for each pixel
+    // After this last header line, binary data stores the rgb values for each pixel
     // in row-major order. Each pixel requires 3 bytes ordered R, G, and B.
     //
     // NOTE: Windows file handling is rather crotchetty. You may have to change the
@@ -946,7 +1546,7 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
     char line[1024];
     int i;
     unsigned char *tmp;
-    double *fRGB;
+    double *frgb;
 
     im = NULL;
     f = fopen(filename, "rb+");
@@ -983,3 +1583,335 @@ unsigned char *readPPMimage(const char *filename, int *rx, int *ry) {
 
     return (im);
 }
+
+/************************************************************************************************************************
+ *   HELPER FUNCTION SECTION
+ ***********************************************************************************************************************/
+
+/*!
+ * turn a side 90 degree
+ * @param side 1 left 0 right
+ */
+void turn_45_degree_both_wheel(int side) {
+    if(side == 1) {
+        BT_timed_motor_port_start(MOTOR_B, 20, 80, 500, 80);
+        BT_timed_motor_port_start(MOTOR_A, -20, 60, 600, 60);
+    } else {
+        BT_timed_motor_port_start(MOTOR_A, 21, 60, 600, 60);
+        BT_timed_motor_port_start(MOTOR_B, -20, 80, 500, 80);
+    }
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+/*!
+ * turn a side 90 degree
+ * @param side 1 left 0 right
+ */
+void turn_90_degree_both_wheel(int side) {
+    if(side == 1) {//turn left
+        BT_timed_motor_port_start(MOTOR_B, 18, 60, 1000, 60);
+        BT_timed_motor_port_start(MOTOR_A, -18, 60, 1000, 60);
+
+    } else {
+        BT_timed_motor_port_start(MOTOR_A, 21, 60, 1000, 60);
+        BT_timed_motor_port_start(MOTOR_B, -20, 60, 1000, 60);
+    }
+    for(int i = 0; i <= 2000000000; i ++);
+}
+
+/*!
+ * turn a side 180 degree
+ */
+void turn_180_degree_both_wheel(void) {
+    BT_timed_motor_port_start(MOTOR_B, 20, 60, 2200, 60);
+    BT_timed_motor_port_start(MOTOR_A, -20, 60, 2200, 60);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+/*!
+ * This function read the sensor and return the most likely color
+ * and calculate the possibility of others
+ * @return index of that color.
+ */
+int Distinguish_Color(void) {
+    double possibility[7];
+
+
+    BT_read_colour_sensor_RGB(PORT_1, rgb);
+    printf("sensor value: R %i B %i G %i \n", rgb[0], rgb[1], rgb[2]);
+    double colour_error[7];
+
+    int Black_Error = pow(Black[0] - rgb[0], 2) + pow(Black[1] - rgb[1], 2) + pow(Black[2] - rgb[2], 2);
+    int Blue_Error = pow(Blue[0] - rgb[0], 2) + pow(Blue[1] - rgb[1], 2) + pow(Blue[2] - rgb[2], 2);
+    int Green_Error = pow(Green[0] - rgb[0], 2) + pow(Green[1] - rgb[1], 2) + pow(Green[2] - rgb[2], 2);
+    int Yellow_Error = pow(Yellow[0] - rgb[0], 2) + pow(Yellow[1] - rgb[1], 2) + pow(Yellow[2] - rgb[2], 2);
+    int Red_Error = pow(Red[0] - rgb[0], 2) + pow(Red[1] - rgb[1], 2) + pow(Red[2] - rgb[2], 2);
+    int White_Error = pow(White[0] - rgb[0], 2) + pow(White[1] - rgb[1], 2) + pow(White[2] - rgb[2], 2);
+    double Sum_Of_Square_Error = sqrt((double)Black_Error) +
+                                 sqrt((double)Blue_Error) +
+                                 sqrt((double)Green_Error) +
+                                 sqrt((double)Yellow_Error) +
+                                 sqrt((double)Red_Error) +
+                                 sqrt((double)White_Error);
+
+
+    possibility[1] = (Sum_Of_Square_Error - sqrt((double) Black_Error)) / Sum_Of_Square_Error;
+    possibility[2] = (Sum_Of_Square_Error - sqrt((double) Blue_Error)) / Sum_Of_Square_Error;
+    possibility[3] = (Sum_Of_Square_Error - sqrt((double) Green_Error)) / Sum_Of_Square_Error;
+    possibility[4] = (Sum_Of_Square_Error - sqrt((double) Yellow_Error)) / Sum_Of_Square_Error;
+    possibility[5] = (Sum_Of_Square_Error - sqrt((double) Red_Error)) / Sum_Of_Square_Error;
+    possibility[6] = (Sum_Of_Square_Error - sqrt((double) White_Error)) / Sum_Of_Square_Error;
+
+    double max=-1;
+    int colour_value=1;
+    for (int i = 1; i < 7; i++) {
+        if (max <= possibility[i] ) {
+            max = possibility[i];
+            colour_value = i;
+        }
+    }
+    printf("colour value: %i\n", colour_value);
+    return colour_value;
+
+
+}
+
+void turn_left_small(void) {
+    BT_timed_motor_port_start(MOTOR_B, 30, 60, 80, 60);
+    BT_timed_motor_port_start(MOTOR_A, -30, 60, 80, 60);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void turn_right_small(void) {
+    BT_timed_motor_port_start(MOTOR_A, 30, 60, 80, 60);
+    BT_timed_motor_port_start(MOTOR_B, -30, 60, 80, 60);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+/*!
+ * find road turn the robot upright after find road left
+ */
+void turn_upright(int side) {
+    if(side == 1) {
+        BT_timed_motor_port_start(MOTOR_A, 30, 80, 600, 80);
+        BT_timed_motor_port_start(MOTOR_B, -30, 80, 600, 80);
+    } else {
+        BT_timed_motor_port_start(MOTOR_B, 30, 80, 600, 80);
+        BT_timed_motor_port_start(MOTOR_A, -30, 80, 600, 80);
+    }
+
+}
+
+void turn_backwards(void) {
+    bool flag = true;
+    while(flag) {
+        BT_motor_port_start(MOTOR_A | MOTOR_B, -5);
+        if(Distinguish_Color() == 1) {
+            printf("delay !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            //for(int i = 0; i <= 500000; i ++);
+            flag = false;
+        }
+    }
+    for(int i = 0; i <= 500000000; i ++);
+}
+
+/*!
+ * get the average of the color
+ */
+void Read_sensor(void) {
+    int sum[]={0,0,0};
+    for(int i=0;i<10;i++){
+        BT_read_colour_sensor_RGB(PORT_1, rgb);
+        printf("sensor value: R %i B %i G %i \n", rgb[0], rgb[1], rgb[2]);
+        sum[0]=sum[0]+rgb[0];
+        sum[1]=sum[1]+rgb[1];
+        sum[2]=sum[2]+rgb[2];
+    }
+    printf("read color... \n");
+    //avrage the rgb
+    rgb[0] = (int)(sum[0]/10);
+    rgb[1] = (int)(sum[1]/10);
+    rgb[2] = (int)(sum[2]/10);
+
+}
+/*
+void command(void){
+    bool flag = true;
+    while(flag) {
+        printf("robot init !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        // go across the map until find the road, hit a intersection or wall
+        while (Distinguish_Color() != 1 && Distinguish_Color() != 4 && Distinguish_Color() != 5) {
+            BT_drive(MOTOR_A, MOTOR_B, 10);
+        }
+        // if the robot hit the wall, go to FIND RED state.
+        if (Distinguish_Color() == 5) {
+            BT_all_stop(1);
+            find_red();
+            flag = false;
+            // if the robot find the intersection, then go to find FIND YELLOW state.
+        } else if (Distinguish_Color() == 4) {
+            //printf("delay !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            //for(int i = 0; i <= 100000000; i ++);
+            BT_all_stop(1);
+            turn_at_intersection(0);
+            // assume the robot is placed anywhere on the map
+            // go to FIND ROAD state.
+        } else {
+            BT_all_stop(1);
+            drive_along_street();
+        }
+    }
+    printf("command over !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+}
+*/
+void find_red(void) {
+    printf("find RED !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    redflag = 1;
+    turn_180_degree_both_wheel();
+    printf("delay ***************************************************************************\n");
+    for(int i = 0; i <= 1000000000; i ++);
+    while(Distinguish_Color() == 5) {
+        forward_small_1();
+    }
+}
+
+void adjust(void) {
+    int left_num = 0, right_num = 0, turn_limit = 1, last_turn = 0;
+    bool flag = true;
+    printf("ADJUST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    while(Distinguish_Color() != 1 && Distinguish_Color() != 4 && flag) {
+        turn_backwards();
+        printf("ADJUST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        if(left_num < turn_limit) {
+            printf("TURN LEFT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            turn_left_small();
+            left_num += 1;
+            last_turn = 1;
+        } else if(right_num < 2 * turn_limit){
+            printf("TURN RIGHT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            turn_right_small();
+            right_num += 1;
+            last_turn = 0;
+        }
+        forward_small_2();
+        // if the robot does not find street and intersection, then continue scanning.
+        if(Distinguish_Color() != 1 &&
+           Distinguish_Color() != 4 &&
+           Distinguish_Color() != 5) {
+            // finish scan left and right but still does not find the road.
+            if (left_num >= turn_limit && right_num >= 2 * turn_limit) {
+                left_num = 0;
+                right_num = 0;
+                turn_limit += 1;
+            }
+        } else {
+            backward_small_2();
+            if(last_turn == 1) {
+                turn_left_small();
+            } else {
+                turn_right_small();
+            }
+            forward_small_2();
+            flag = false;
+        }
+    }
+}
+/*
+int double_check(void) {
+    printf("double check !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+    for(int i = 0; i <= 1000000000; i ++);
+    forward_small_3();
+    return Distinguish_Color();
+
+}*/
+
+void forward_small_3(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 15, 80, 80, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void forward_small_2(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 20, 80, 200, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void forward_small_1(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 25, 80, 400, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void backward_small_3(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -15, 80, 80, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void backward_small_2(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -20, 80, 200, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void backward_small_1(void) {
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -25, 80, 400, 80);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void rescan(void) {
+    while(Distinguish_Color() == 4) {
+        forward_small_2();
+    }
+    turn_right_small();
+    while(Distinguish_Color() != 4) {
+        BT_motor_port_start(MOTOR_A | MOTOR_B, -10);
+    }
+}
+
+int double_check(void) {
+    forward_small_3();
+    return Distinguish_Color();
+}
+/*
+int get_true_angle(void) {
+    if (0 < angle && angle < 63) {
+        angle_jump = 0;
+    }
+
+    for (int i = 0; i < 15; i++) {
+        if ((92 + 256 * i) < angle && angle < (292 + 256 * i)) {
+            angle_jump = i + 1;
+        }
+
+        if ((-420 - 256 * i) < angle && angle < (-220 - 256 * i)) {
+            angle_jump = -i - 1;
+        }
+    }
+    printf("angle_jump=%i\n", angle_jump);
+
+    if (-128 <= angle && angle <= -1) {
+        real_angle = angle + 256 * angle_jump;
+    } else {
+        real_angle = angle;
+    }
+    return real_angle;
+}
+
+void turn_left_angle(int angle) {
+    //left angle
+    int start_angle = get_true_angle();
+    BT_turn(MOTOR_A, -20, MOTOR_B, 20);
+    for(int i = 0; i <= 1000000000; i ++);
+    //while (fabs((float) (get_true_angle() - start_angle)) < angle - 6);
+    printf("stop....\n");
+    BT_all_stop(1);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+
+void turn_right_angle(int angle) {
+    //left angle
+    int start_angle = get_true_angle();
+    BT_turn(MOTOR_A, 22, MOTOR_B, -19);
+    //while (fabs((float) (get_true_angle() - start_angle)) < angle - 6);
+    printf("stop....\n");
+    BT_all_stop(1);
+    for(int i = 0; i <= 1000000000; i ++);
+}
+*/

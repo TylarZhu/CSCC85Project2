@@ -98,6 +98,7 @@ int rgb[3];
 double possibility[8];
 int Black[3],Blue[3],Green[3],Yellow[3],Red[3],White[3];
 int tl = 0, tr = 0, br = 0, bl = 0;
+int turn_choice = 0;
 
 
 #define FILE_NAME "rgb.dat" //save for RGB initial value
@@ -316,37 +317,49 @@ int find_street(void) {
  */
 int drive_along_street(void) {
     printf("ON THE ROAD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-    while (tl != 3 || tr != 6 || br != 2 || bl != 6) {
+    while (1) {
         // if the robot is on the road, then follow it.
         while (Distinguish_Color() == 1) {
             BT_motor_port_start(MOTOR_A | MOTOR_B, 10);
             // if the robot is on the intersection, then go to FIND YELLOW state.
         }
-        if (Distinguish_Color() == 4) {
+        BT_all_stop(1);
+        int color = double_check();
+        if (color == 4) {
             for (int i = 0; i <= 80000000; i++);
-            BT_all_stop(1);
+            //BT_all_stop(1);
             int scan_comp = 1;
+            /*
             while (scan_comp == 1) {
-                scan_comp = scan_intersection();
+
                 if (scan_comp == 1) {
                     printf("rescan intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                    rescan();
+                    //rescan();
                 }
+            }*/
+            scan_comp = scan_intersection();
+            //if(tl != 3 || tr != 6 || br != 2 || bl != 6) {
+            printf("turn intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            turn_at_intersection(turn_choice);
+            if(turn_choice == 1) {
+                turn_choice = 0;
+            } else {
+                turn_choice = 1;
             }
-            if(tl != 3 || tr != 6 || br != 2 || bl != 6) {
-                printf("turn intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                turn_at_intersection(0);
-                printf("forward intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-                forward_small_1();
-            }
+
+            printf("forward intersection !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+            forward_small_1();
+            //
+            //    forward_small_1();
+            //}
             // if the robot hit the wall, then go to FIND RED state.
-        } else if (Distinguish_Color() == 5) {
-            BT_all_stop(1);
+        } else if (color == 5) {
+            //BT_all_stop(1);
             find_red();
             // if the robot is not on the road, the road must be near the robot,
             // then go to ADJUST state.
         } else {
-            BT_all_stop(1);
+            //BT_all_stop(1);
             adjust();
         }
     }
@@ -391,7 +404,7 @@ int scan_intersection() {
     br = Distinguish_Color();
     forward_small_1();
     turn_90_degree_both_wheel(0);
-    //turn_right_small();
+    turn_right_small();
     forward_small_1();
     //forward_small_3();
     tr = Distinguish_Color();
@@ -428,13 +441,14 @@ int turn_at_intersection(int turn_direction) {
         turn_90_degree_both_wheel(0);
     } else {
         turn_90_degree_both_wheel(1);
-        turn_left_small();
+        //turn_left_small();
         //turn_left_small();
     }
     // move the robot out of the intersection.
+    /*
     while(Distinguish_Color() == 4) {
         forward_small_2();
-    }
+    }*/
     return (0);
 }
 
@@ -1195,12 +1209,12 @@ void turn_45_degree_both_wheel(int side) {
  */
 void turn_90_degree_both_wheel(int side) {
     if(side == 1) {//turn left
-        BT_timed_motor_port_start(MOTOR_B, 20, 80, 1000, 80);
-        BT_timed_motor_port_start(MOTOR_A, -20, 80, 1000, 80);
+        BT_timed_motor_port_start(MOTOR_B, 18, 60, 1000, 60);
+        BT_timed_motor_port_start(MOTOR_A, -18, 60, 1000, 60);
 
     } else {
-        BT_timed_motor_port_start(MOTOR_A, 21, 60, 1100, 60);
-        BT_timed_motor_port_start(MOTOR_B, -20, 60, 1100, 60);
+        BT_timed_motor_port_start(MOTOR_A, 21, 60, 1000, 60);
+        BT_timed_motor_port_start(MOTOR_B, -20, 60, 1000, 60);
     }
     for(int i = 0; i <= 2000000000; i ++);
 }
@@ -1256,6 +1270,7 @@ int Distinguish_Color(void) {
             colour_value = i;
         }
     }
+    printf("colour value: %i\n", colour_value);
     return colour_value;
 
 
@@ -1447,6 +1462,11 @@ void rescan(void) {
     while(Distinguish_Color() != 4) {
         BT_motor_port_start(MOTOR_A | MOTOR_B, -10);
     }
+}
+
+int double_check(void) {
+    forward_small_3();
+    return Distinguish_Color();
 }
 /*
 int get_true_angle(void) {

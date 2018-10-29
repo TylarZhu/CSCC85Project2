@@ -141,4 +141,6 @@ void turn_45_degree_both_wheel(int);
 
 void rescan(void);
 
+int double_check(void);
+
 #endif

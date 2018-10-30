@@ -88,6 +88,7 @@
 
 #include "EV3_Localization.h"
 #include <stdbool.h>
+int tone_data[50][3];
 
 int redflag = 0;
 
@@ -323,6 +324,12 @@ int find_street(void) {
  * @return int, 1 fail 0 success
  */
 int drive_along_street(void) {
+    for (int i=0;i<50; i++){
+
+            tone_data[i][0]=-1;
+            tone_data[i][1]=-1;
+            tone_data[i][2]=-1;
+        }
     printf("ON THE ROAD !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     while (1) {
         // if the robot is on the road, then follow it.
@@ -361,6 +368,19 @@ int drive_along_street(void) {
             sc[1] = tr;
             sc[2] = br;
             sc[3] = bl;
+            tone_data[0][0] = 50 * tl+200;
+            tone_data[0][1] = 250;
+            tone_data[0][2] = 30;
+            tone_data[1][0] = 50 * tr+200;
+            tone_data[1][1] = 250;
+            tone_data[1][2] = 30;
+            tone_data[2][0] = 50 * br+200;
+            tone_data[2][1] = 250;
+            tone_data[2][2] = 30;
+            tone_data[3][0] = 50 * bl+200;
+            tone_data[3][1] = 250;
+            tone_data[3][2] = 30;
+            BT_play_tone_sequence(tone_data);
             printf("last turn choice is %i\n",turn);
             update_beliefs(turn,sc);
             robot_localization();
@@ -429,6 +449,7 @@ int scan_intersection() {
     turn_45_degree_both_wheel(1);
     forward_small_1();
     tl = Distinguish_Color();
+
     /*
     if(tl == 1) {
         printf("rescan top left !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
@@ -1105,7 +1126,7 @@ int robot_localization() {
             }
         }
     }
-    printf("Max is %2f rbt_x is %i rbt_y is %i rbt_dir is %i\n", max,rbt_x,rbt_y,rbt_dir);
+
     for (int j = 0; j < sy; j++) {
         for (int i = 0; i < sx; i++) {
             if ((max - beliefs[i + (j * sx)][0]) < 0.01  && (rbt_x != i || rbt_y != j || rbt_dir != 0)){
@@ -1132,6 +1153,7 @@ int robot_localization() {
         }
     }
     printf("Find the localization: i is %i j is %i direction is %i \n", rbt_x,rbt_y,rbt_dir);
+    
     return (0);
 }
 
@@ -1158,6 +1180,27 @@ int go_to_target(int robot_x, int robot_y, int direction, int target_x, int targ
      ***********************************************************************************************************************/
     if (robot_x == target_x && robot_y == target_y){
         printf("success!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+
+        for (int i=0;i<50; i++){
+
+            tone_data[i][0]=-1;
+            tone_data[i][1]=-1;
+            tone_data[i][2]=-1;
+        }
+     
+        tone_data[0][0]=262;
+        tone_data[0][1]=250;
+        tone_data[0][2]=40;
+        tone_data[1][0]=330;
+        tone_data[1][1]=250;
+        tone_data[1][2]=25;
+        tone_data[2][0]=392;
+        tone_data[2][1]=250;
+        tone_data[2][2]=50;
+        tone_data[3][0]=523;
+        tone_data[3][1]=250;
+        tone_data[3][2]=63;
+        BT_play_tone_sequence(tone_data);
         exit(0);
     }
 

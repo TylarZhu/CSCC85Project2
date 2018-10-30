@@ -470,8 +470,8 @@ int scan_intersection() {
     //forward_small_2();
     //for(int i = 0; i <= 100000000; i ++);
     turn_45_degree_both_wheel(1);
-    turn_left_small();
-    forward_small_2();
+    //turn_left_small();
+    //forward_small_2();
     //turn_90_degree_both_wheel(1);
     printf("scan intersection complete!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     if(tl == 1 || tr == 1 || br == 1 || bl == 1) {
@@ -1108,22 +1108,22 @@ int robot_localization() {
     printf("Max is %2f rbt_x is %i rbt_y is %i rbt_dir is %i\n", max,rbt_x,rbt_y,rbt_dir);
     for (int j = 0; j < sy; j++) {
         for (int i = 0; i < sx; i++) {
-            if ((max - beliefs[i + (j * sx)][0]) < 0.00001  && (rbt_x != i || rbt_y != j || rbt_dir != 0)){
+            if ((max - beliefs[i + (j * sx)][0]) < 0.01  && (rbt_x != i || rbt_y != j || rbt_dir != 0)){
                 rbt_x = -1;
                 rbt_y = -1;
                 rbt_dir = -1;
                 return(-1);
-            }else if ((max - beliefs[i + (j * sx)][1]) < 0.00001 && (rbt_x != i || rbt_y != j || rbt_dir != 1)){
+            }else if ((max - beliefs[i + (j * sx)][1]) < 0.01 && (rbt_x != i || rbt_y != j || rbt_dir != 1)){
                 rbt_x = -1;
                 rbt_y = -1;
                 rbt_dir = -1;
                 return(-1);
-            }else if ((max - beliefs[i + (j * sx)][2]) < 0.00001 && (rbt_x != i || rbt_y != j || rbt_dir != 2)){
+            }else if ((max - beliefs[i + (j * sx)][2]) < 0.01 && (rbt_x != i || rbt_y != j || rbt_dir != 2)){
                 rbt_x = -1;
                 rbt_y = -1;
                 rbt_dir = -1;
                 return(-1);
-            }else if ((max - beliefs[i + (j * sx)][3]) < 0.00001  && (rbt_x != i || rbt_y != j || rbt_dir != 3)){
+            }else if ((max - beliefs[i + (j * sx)][3]) < 0.01  && (rbt_x != i || rbt_y != j || rbt_dir != 3)){
                 rbt_x = -1;
                 rbt_y = -1;
                 rbt_dir = -1;
@@ -1642,8 +1642,8 @@ void turn_90_degree_both_wheel(int side) {
         BT_timed_motor_port_start(MOTOR_A, -18, 60, 1200, 60);
 
     } else {
-        BT_timed_motor_port_start(MOTOR_A, 21, 60, 1500, 60);
-        BT_timed_motor_port_start(MOTOR_B, -20, 60, 1500, 60);
+        BT_timed_motor_port_start(MOTOR_A, 21, 60, 1300, 60);
+        BT_timed_motor_port_start(MOTOR_B, -20, 60, 1300, 60);
     }
     for(int i = 0; i <= 2000000000; i ++);
 }
@@ -1805,11 +1805,32 @@ void find_red(void) {
 }
 
 void adjust(void) {
-    int left_num = 0, right_num = 0, turn_limit = 1, last_turn = 0;
+    
+    int left_num = 1, right_num = 2;
     bool flag = true;
     printf("ADJUST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     while(Distinguish_Color() != 1 && Distinguish_Color() != 4 && flag) {
-        turn_backwards();
+        backward_small_3();
+        backward_small_2();
+        for (int i = 0; i < left_num;i++){
+            turn_left_small();
+        }
+        forward_small_2();
+        if(Distinguish_Color() != 1 &&
+           Distinguish_Color() != 4 &&
+           Distinguish_Color() != 5){
+            backward_small_2();
+            right_num += left_num;
+            left_num += right_num;
+            for (int i = 0; i < right_num; i++)
+            {
+                turn_right_small();
+            }
+        forward_small_2();
+        }
+
+        /*
+        backward_small_2();
         printf("ADJUST !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
         if(left_num < turn_limit) {
             printf("TURN LEFT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
@@ -1843,7 +1864,9 @@ void adjust(void) {
             forward_small_2();
             flag = false;
         }
+        */
     }
+    
 }
 /*
 int double_check(void) {
@@ -1860,12 +1883,12 @@ void forward_small_3(void) {
 }
 
 void forward_small_2(void) {
-    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 20, 80, 200, 80);
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 20, 80, 250, 80);
     for(int i = 0; i <= 1000000000; i ++);
 }
 
 void forward_small_1(void) {
-    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 25, 80, 400, 80);
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, 25, 80, 450, 80);
     for(int i = 0; i <= 1000000000; i ++);
 }
 
@@ -1875,12 +1898,12 @@ void backward_small_3(void) {
 }
 
 void backward_small_2(void) {
-    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -20, 80, 200, 80);
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -20, 80, 250, 80);
     for(int i = 0; i <= 1000000000; i ++);
 }
 
 void backward_small_1(void) {
-    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -25, 80, 400, 80);
+    BT_timed_motor_port_start(MOTOR_A | MOTOR_B, -25, 80, 450, 80);
     for(int i = 0; i <= 1000000000; i ++);
 }
 

@@ -117,12 +117,7 @@ int dest_x, dest_y;
 #define FIND_YELLOW 4
 #define FIND_RED 5
 #define ROBOT_STOP 6
-void update_beliefs(int last_act, int intersection_reading[4]);
-
-
-
-
-
+//void update_beliefs(int last_act, int intersection_reading[4]);
 
 
 int main(int argc, char *argv[]) {
@@ -434,18 +429,39 @@ int scan_intersection() {
     turn_45_degree_both_wheel(1);
     forward_small_1();
     tl = Distinguish_Color();
+    /*
+    if(tl == 1) {
+        printf("rescan top left !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        rescan(1);
+    }*/
     backward_small_1();
     backward_small_1();
     br = Distinguish_Color();
+    /*
+    if(br == 1) {
+        printf("rescan b right !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        rescan(0);
+    }*/
     forward_small_1();
+    //forward_small_3();
     turn_90_degree_both_wheel(0);
-    turn_right_small();
+    //turn_right_small();
     forward_small_1();
     //forward_small_3();
     tr = Distinguish_Color();
+    /*
+    if(tr == 1) {
+        printf("rescan top right !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        rescan(1);
+    }*/
     backward_small_1();
     backward_small_1();
     bl = Distinguish_Color();
+    /*
+    if(bl == 1) {
+        printf("rescan b left !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
+        rescan(0);
+    }*/
     forward_small_1();
     printf("tl = %i\n", tl);
     printf("tr = %i\n", tr);
@@ -454,6 +470,9 @@ int scan_intersection() {
     //forward_small_2();
     //for(int i = 0; i <= 100000000; i ++);
     turn_45_degree_both_wheel(1);
+    turn_left_small();
+    forward_small_2();
+    //turn_90_degree_both_wheel(1);
     printf("scan intersection complete!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     if(tl == 1 || tr == 1 || br == 1 || bl == 1) {
         printf("scan intersection fail*************************************************!\n");
@@ -1094,17 +1113,17 @@ int robot_localization() {
                 rbt_y = -1;
                 rbt_dir = -1;
                 return(-1);
-            }else if (max == beliefs[i + (j * sx)][1] && (rbt_x != i || rbt_y != j || rbt_dir != 1)){
+            }else if ((max - beliefs[i + (j * sx)][1]) < 0.00001 && (rbt_x != i || rbt_y != j || rbt_dir != 1)){
                 rbt_x = -1;
                 rbt_y = -1;
                 rbt_dir = -1;
                 return(-1);
-            }else if (max == beliefs[i + (j * sx)][2] && (rbt_x != i || rbt_y != j || rbt_dir != 2)){
+            }else if ((max - beliefs[i + (j * sx)][2]) < 0.00001 && (rbt_x != i || rbt_y != j || rbt_dir != 2)){
                 rbt_x = -1;
                 rbt_y = -1;
                 rbt_dir = -1;
                 return(-1);
-            }else if (max == beliefs[i + (j * sx)][3] && (rbt_x != i || rbt_y != j || rbt_dir != 3)){
+            }else if ((max - beliefs[i + (j * sx)][3]) < 0.00001  && (rbt_x != i || rbt_y != j || rbt_dir != 3)){
                 rbt_x = -1;
                 rbt_y = -1;
                 rbt_dir = -1;
@@ -1619,12 +1638,12 @@ void turn_45_degree_both_wheel(int side) {
  */
 void turn_90_degree_both_wheel(int side) {
     if(side == 1) {//turn left
-        BT_timed_motor_port_start(MOTOR_B, 18, 60, 1000, 60);
-        BT_timed_motor_port_start(MOTOR_A, -18, 60, 1000, 60);
+        BT_timed_motor_port_start(MOTOR_B, 18, 60, 1200, 60);
+        BT_timed_motor_port_start(MOTOR_A, -18, 60, 1200, 60);
 
     } else {
-        BT_timed_motor_port_start(MOTOR_A, 21, 60, 1000, 60);
-        BT_timed_motor_port_start(MOTOR_B, -20, 60, 1000, 60);
+        BT_timed_motor_port_start(MOTOR_A, 21, 60, 1500, 60);
+        BT_timed_motor_port_start(MOTOR_B, -20, 60, 1500, 60);
     }
     for(int i = 0; i <= 2000000000; i ++);
 }
@@ -1633,8 +1652,8 @@ void turn_90_degree_both_wheel(int side) {
  * turn a side 180 degree
  */
 void turn_180_degree_both_wheel(void) {
-    BT_timed_motor_port_start(MOTOR_B, 20, 60, 2200, 60);
-    BT_timed_motor_port_start(MOTOR_A, -20, 60, 2200, 60);
+    BT_timed_motor_port_start(MOTOR_B, 20, 60, 2700, 60);
+    BT_timed_motor_port_start(MOTOR_A, -20, 60, 2700, 60);
     for(int i = 0; i <= 1000000000; i ++);
 }
 
@@ -1865,15 +1884,93 @@ void backward_small_1(void) {
     for(int i = 0; i <= 1000000000; i ++);
 }
 
-void rescan(void) {
-    while(Distinguish_Color() == 4) {
-        forward_small_2();
+/*!
+ * choice a side to rescan
+ * @param rescan_side 0 tl tr, 1 br  bl
+ */
+ /*
+void rescan(int rescan_side) {
+    int turn_right = 0, turn_left = 0, turn_limit = 1;
+    if(rescan_side == 1) {
+        while (tl == 1) {
+            backward_small_1();
+            if (turn_left < turn_limit) {
+                while (turn_left < turn_limit) {
+                    turn_left_small();
+                    turn_left += 1;
+                }
+            } else if (turn_right < turn_limit) {
+                while (turn_right < turn_limit * 2) {
+                    turn_right_small();
+                    turn_right += 1;
+                }
+            }
+            forward_small_1();
+            tl = Distinguish_Color();
+            if (tl == 1 && turn_right >= turn_limit) {
+                turn_limit++;
+            }
+        }
+        while (tr == 1) {
+            backward_small_1();
+            if (turn_left < turn_limit) {
+                while (turn_left < turn_limit) {
+                    turn_left_small();
+                    turn_left += 1;
+                }
+            } else if (turn_right < turn_limit) {
+                while (turn_right < turn_limit * 2) {
+                    turn_right_small();
+                    turn_right += 1;
+                }
+            }
+            forward_small_1();
+            tr = Distinguish_Color();
+            if (tr == 1 && turn_right >= turn_limit) {
+                turn_limit++;
+            }
+        }
+    } else {
+        while (br == 1) {
+            forward_small_1();
+            if (turn_right < turn_limit) {
+                while (turn_right < turn_limit) {
+                    turn_right_small();
+                    turn_right += 1;
+                }
+            } else if (turn_left < turn_limit * 2) {
+                while (turn_left < turn_limit) {
+                    turn_left_small();
+                    turn_left += 1;
+                }
+            }
+            backward_small_1();
+            br = Distinguish_Color();
+            if (br == 1 && turn_right >= turn_limit) {
+                turn_limit++;
+            }
+        }
+        while (bl == 1) {
+            forward_small_1();
+            if (turn_left < turn_limit) {
+                while (turn_left < turn_limit) {
+                    turn_left_small();
+                    turn_left += 1;
+                }
+            } else if (turn_right < turn_limit) {
+                while (turn_right < turn_limit * 2) {
+                    turn_right_small();
+                    turn_right += 1;
+                }
+            }
+            backward_small_1();
+            bl = Distinguish_Color();
+            if (bl == 1 && turn_right >= turn_limit) {
+                turn_limit++;
+            }
+        }
     }
-    turn_right_small();
-    while(Distinguish_Color() != 4) {
-        BT_motor_port_start(MOTOR_A | MOTOR_B, -10);
-    }
-}
+}*/
 
 int double_check(void) {
     forward_small_3();
